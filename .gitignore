@@ -19,3 +19,6 @@ Thumbs.db
 
 # ---- 日志 ----
 *.log
+
+# archify 工作目录（生成物与回执，不纳入版本库）
+.archify/
