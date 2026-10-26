@@ -2,7 +2,7 @@
 
 > 依据《科研智能体总体方案 **v26**》**D13–D27**。本文档为阶段 1 冻结对象，**自包含**。
 > **变更史**：v1.0.0=依 v12；v1.1.x–v1.2.x=对齐 v15–v20；v1.3.0=D23 修订一；v1.4.0=D24 修订二；v1.5.0=D25 一致性清零；v1.5.1=自包含勘误；v1.6.0=D26 机器可判定性清零（P0 四项 + P1 十二项 + P2 九项）。
-> **版本记录**：**v1.7.0（当前）=D27 文档门禁化**：冻结判据由清单式改为**四层判据 G1–G4**（79 项断言）、三处内嵌视图改由 `tools/gen_docs_views.py` 机生成并守护、v1.6.0 残留的 12 处文档漂移全部转为 `tools/check_docs_consistency.py` 的机检断言 C1–C8；ClaimCard **1.4.0**（三条机器可判定规则 + 十一角色词表）、ClaimRow **1.2.0**（`claimcard_schema_version` 版本绑定）、§六 TOST 检视网格与 σ_d 可行域（明细见 §十一修订对照表）。
+> **版本记录**：**v1.7.0（当前）=D27 文档门禁化**：冻结判据由清单式改为**四层判据 G1–G4**（82 项断言）、三处内嵌视图改由 `tools/gen_docs_views.py` 机生成并守护、v1.6.0 残留的 12 处文档漂移全部转为 `tools/check_docs_consistency.py` 的机检断言 C1–C9（含链层契约 L1–L5 文档-码表对偶）、§1.4 末链层 5 项契约由散文改为 **L1–L5 结构化登记表**（契约本体 `tools/freeze_codes.py::CHAIN_CONTRACTS`）；ClaimCard **1.4.0**（三条机器可判定规则 + 十一角色词表）、ClaimRow **1.2.0**（`claimcard_schema_version` 版本绑定）、§六 TOST 检视网格与 σ_d 可行域（明细见 §十一修订对照表）。
 > **版本口径**：方案版本（总纲 vN）／各 schema 自带 version。**阶段验收基线六件套** = 交付物 **v1.7.0** + ClaimCard **1.4.0** + ClaimRow **1.2.0** + PlanItem **1.0.1**（含 ManifestEntry **1.0.0**）。
 > 其余两件同属**阶段验收基线六件套**：Contracts **1.1.0** + ExclusionList **1.0.2**。
 > **版本对偶绑定规则（D26，修 P0-2）**：文档族任一侧修订必须同轮双向更新三处——①交付物抬头"依据总纲 vN"；②总纲 §12/§17 的交付物版本；③两侧基线清单。`tools/check_cross_refs.py` 机械校验，任一不一致即冻结失败。
@@ -785,7 +785,15 @@
 
 **ClaimRow 包装三例（G2，修 P1 漂移 #12）**：正例（内嵌 card 经 `$ref` 生效）；拒·未知字段（行级 `additionalProperties:false`）；拒·`claimcard_schema_version`=1.3.0 与内嵌 card 1.4.0 不符（1.2.0 起该字段为 `const`，防混版本声明链）。
 
-**链层用例契约五项（G2 登记，schema 层不可判定，ledger-mcp 实现后由 M3 验收）**：method.plan_ref 不可解析 → 步 4 `PLAN_UNBOUND`；context 条目不属当前轮 → 步 6 `DOI_NOT_IN_MANIFEST`；framing 指向 T3 条目 → 步 6 `BACKBONE_GRADE_VIOLATION`；transition 缺 on_behalf_of_role → 步 1 `SCHEMA_FAIL`；首行 created_by_role ≠ 凭证 on_behalf_of_role → 步 4 `TRANSITION_INVALID`（R-08）。
+**链层用例契约五项（L1–L5 结构化登记；schema 层不可判定或不可完整判定——L4 已可判定，仅需回归确认，其余需链层运行时，ledger-mcp 实现后由 M3 逐条验收）**：登记表是**契约本体**（单一事实源 `tools/freeze_codes.py::CHAIN_CONTRACTS`），门禁 G3e–G3g 校验其登记完整性（id 连续、码属八步链、三通道 + 两条凭证规则全覆盖），`tools/check_docs_consistency.py` C9 校验「本表 ↔ 码表」双向一致；**登记不计入 PASS 断言数**，执行结果待 M3 回填。
+
+| 契约 | 场景（schema 判不了的部分） | 拦截步 | 错误码 | M3 验收点 |
+|---|---|---|---|---|
+| L1 | method 通道：`plan_ref` 不可解析（schema 只判非空） | 步 4 | `PLAN_UNBOUND` | 计划注册表查无该 `plan_ref` → 拒绝合并并落码 |
+| L2 | context 通道：`citation_refs` 条目不属当前轮 MANIFEST（schema 只判必填） | 步 6 | `DOI_NOT_IN_MANIFEST` | 本轮 MANIFEST 无该条目 → 拒绝并落码 |
+| L3 | framing 通道：`framing_ref` 档位非 backbone（schema 只判必填） | 步 6 | `BACKBONE_GRADE_VIOLATION` | 档位矩阵校验 `curation_grade` → 拒绝并落码 |
+| L4 | 凭证规则：`to=superseded` 缺 `on_behalf_of_role`（1.4.0 起 schema 已可判定） | 步 1 | `SCHEMA_FAIL` | 回归确认链层不复判、不产生第二来源 |
+| L5 | 凭证规则：首行 `created_by_role` ≠ 凭证 `on_behalf_of_role`（R-08，需比对凭证，schema 不可判定） | 步 4 | `TRANSITION_INVALID` | rail 凭证代签角色与行谱系不符 → 落码 |
 
 ### 1.5 状态机、凭证映射与复活规则
 - **时序键（修 P1-7）**：当前态 = 同 claim_id 的 `row_seq` 最大行（链上整数，不用 appended_at）；writing/终检读当前态 active-only；Auditor 读全历史；
@@ -1022,15 +1030,15 @@ v1.5.1 只在文字里说"属当前轮 MANIFEST 条目"但从未定义条目 sch
 同 v1.5.1 表，另两条 D26 注记：**α 估计量**——"两两配对取均值"为非标准估计量，与文献阈值不可直接比，阶段 3 改用标准 Krippendorff α（含 CI）；**MVP 溯源边界（修 P1-14）**——论文数字抽取器阶段 4/5 交付前，"正文无卡数字"为抽检而非硬门，EQI 覆盖率按此口径标注并写入总纲 limitation。
 
 ## 五、冻结判据（v1.7.0）
-- **5.1 门禁四层 = `tools/validate_freeze.py`，全绿即退出码 0**：当前共 **79 项断言**，分层计数 **G1 42 / G2 23 / G3 4 / G4 10**（每次运行由脚本自报，文档不得写死与实测不符的数）：
+- **5.1 门禁四层 = `tools/validate_freeze.py`，全绿即退出码 0**：当前共 **82 项断言**，分层计数 **G1 42 / G2 23 / G3 7 / G4 10**（每次运行由脚本自报，文档不得写死与实测不符的数；C4/C4b 双向校验「本文与总纲登记的数字 == 门禁实测」）：
   - **G1 语义层（42）**：六件 schema 全部通过 draft-07 meta-schema；全部 `$ref` 可解析（含 ClaimRow/Contracts 内嵌 definitions）；六件 fixture 正负例——PlanItem 4、ManifestEntry 4、ExclusionList 5（oneOf 分支）、Contracts 10（C1–C8 各一正例 + **C4 白名单注入负例** + payload 不属 C1–C8 负例）；`date-time` FormatChecker；
   - **G2 规则层（23）**：ClaimCard 1.4.0 三条卡级规则 + 十一角色词表（实例 I01–I20 二十例）+ ClaimRow 包装三例（正例 / 行级封闭 / `claimcard_schema_version` 与内嵌版本不符）；本层全部由 jsonschema 直接判定；
-  - **G3 一致性层（4）**：错误码矩阵全大写且唯一、15 子例矩阵（T1a–T5f）无重复归属、八步链 20 个错误码全覆盖、链层专有码 8 项登记；
+  - **G3 一致性层（7）**：错误码矩阵全大写且唯一、15 子例矩阵（T1a–T5f）无重复归属、八步链 20 个错误码全覆盖、链层专有码 8 项登记、**链层契约 L1–L5 登记完整性**（G3e id 连续 / G3f 码均属八步链 / G3g 三通道 + 两条凭证规则全覆盖）；
   - **G4 确定性层（10）**：JCS=RFC 8785（`tools/jcs.py` 内置 35 向量 selftest）、数字规范化（1.0→1、−0.0→0、1e-7、1e20、1e21）、UTF-16 键序、转义、非有限值拒、row_id 幂等派生。
 - **退出码三分**：**0**=全绿；**1**=存在失败（逐条打印失败项）；**2**=依赖缺失（jsonschema 或 `tools/jcs.py` 不可用）。CI 据此区分「schema/文档缺陷」与「环境缺依赖」，不把后者算作红。
 - **清单目录派生**：schema 清单 = `schemas/*.json` 排序结果，不硬编码手写计数（件数/实例数/步数/角色数一律与门禁实测对齐）——计数漂移从此在机器上不可发生（D27 修 P1-6 计数类）。
 - **5.2 四脚本全绿（冻结判据整体）**：`validate_freeze.py`（四层判据）+ `check_cross_refs.py`（版本对偶三处一致：交付物抬头 / 总纲 §12§17 / 基线清单）+ `gen_docs_views.py --check`（§1.2/§1.6/§1.7 三视图 == 权威源确定性投影）+ `gen_composites.py --check`（内嵌定义组合可执行）；
-- **5.3 链层用例契约 5 项待 M3**：schema 层无法判定，门禁只登记、不执行，ledger-mcp 实现后由 M3 验收（清单见 §1.4 末段）；
+- **5.3 链层用例契约 5 项待 M3（L1–L5）**：schema 层无法判定，门禁只校验**登记完整性**、不执行链层行为；契约本体为 `tools/freeze_codes.py::CHAIN_CONTRACTS`，本文件 §1.4 末表为其文档投影（C9 双向对偶），ledger-mcp 实现后由 M3 逐条回填验收结果——届时 `[REG ]` 转 PASS 后计入门禁断言数；
 - **5.4**：P2 未尽项（α 类别敏感性、Compliance/HITL 衔接细则）随签核单归档 M2/M3。
 
 ## 六、宽松度差统计口径（TOST；与总纲 v26 §10 统一；D26/D27 量纲、n 网格与 α-spending 修订）
@@ -1076,12 +1084,15 @@ v1.5.1 只在文字里说"属当前轮 MANIFEST 条目"但从未定义条目 sch
 | `schemas/planitem-1.0.1.json` / `schemas/manifestentry-1.0.0.json` | 计划条目 / MANIFEST 条目 |
 | `schemas/contracts-1.1.0.json` | 信封+C1–C8 payload，**ExclusionList 内嵌 definitions** |
 | `schemas/exclusionlist-1.0.2.json` | 排除清单 |
-| `tools/validate_freeze.py` | 四层门禁 G1–G4：meta-schema／$ref 全解析／C4 白名单断言／三条 1.4.0 规则与十一角色词表／错误码矩阵／JCS 确定性；当前 **79 项断言**，退出码 0/1/2 |
+| `tools/validate_freeze.py` | 四层门禁 G1–G4：meta-schema／$ref 全解析／C4 白名单断言／三条 1.4.0 规则与十一角色词表／错误码矩阵与链层契约登记／JCS 确定性；当前 **82 项断言**，退出码 0/1/2 |
 | `tools/check_cross_refs.py` | 版本对偶三处一致 + 内嵌 version/const/Role 与 11 项集合对偶校验 |
 | `tools/gen_docs_views.py` | §1.2/§1.6/§1.7 三视图自权威源确定性投影；`--check` 手改即红，`--write` 重生成 |
 | `tools/gen_composites.py` | 内嵌定义组合可执行性；`--check` 校验两件 composite |
-| `tools/check_docs_consistency.py` | 文档机检 C1–C8：版本锚／禁止口径／必需口径／断言计数==门禁实测／反引号大写码白名单／§1.3 码覆盖／视图一致／章节结构 |
+| `tools/check_docs_consistency.py` | 文档机检 C1–C9：版本锚／禁止口径／必需口径／断言计数==门禁实测（含总纲 C4b）／反引号大写码白名单／§1.3 码覆盖／视图一致／章节结构／链层契约 L1–L5 文档-码表对偶 |
 | `tools/freeze_codes.py` / `tools/jcs.py` | 错误码单一事实源 / RFC 8785 JCS 实现（含 selftest 向量） |
+
+**脚本工程化约定（D27，四条硬约束）**：①**入口**——统一 `bash run_gates.sh`（导出 `PYTHONIOENCODING=utf-8`/`PYTHONUTF8=1`/`PYTHONDONTWRITEBYTECODE=1`，逐项打印 `[GATE n]` 与 rc，汇总后退出）；②**退出码三分**——0=全绿 / 1=存在失败 / 2=依赖缺失（python 或 `jsonschema` 不可用），CI 与本地同语义；③**单一事实源**——错误码在 `tools/freeze_codes.py`、规范化在 `tools/jcs.py`、视图在 `tools/gen_docs_views.py`，脚本间只 import 不复制；④**清单与计数目录派生**——schema 件数 = `schemas/*.json`，实例数与断言数由脚本自报，文档只许复述实测值（C4/C4b 守护）。
+工程化外围：`pyproject.toml` 钉 `jsonschema==4.26.0`（`date-time` 断言由本仓库自实现，不依赖 `rfc3339-validator`）；`.github/workflows/gates.yml` 在 ubuntu + windows × py3.12 跑同一 `run_gates.sh`；`.gitignore` 排除 `__pycache__`/`*.pyc` 与会话遥测目录。
 
 **冻结判据 = 四脚本全绿**（`validate_freeze.py`、`check_cross_refs.py`、`gen_docs_views.py --check`、`gen_composites.py --check`），人工签核只负责脚本不可判定项（四方签核、夹具/脚本评审、登记项确认）。
 

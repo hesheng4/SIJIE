@@ -43,7 +43,7 @@ except ImportError:
     sys.exit(2)
 
 try:
-    from freeze_codes import CHAIN_CASES, MATRIX, STEP_CODES  # 错误码单一事实源
+    from freeze_codes import CHAIN_CASES, CHAIN_CONTRACTS, MATRIX, STEP_CODES  # 错误码单一事实源
     import jcs
 except ImportError:
     print("FATAL: tools/jcs.py 缺失——JCS 判据无法执行")
@@ -417,6 +417,22 @@ check("G3c 八步链码全覆盖（§1.3 表 ×20）", STEP_CODES <= all_codes, 
 check(f"G3d 码表规模：子例码 {len(sub_codes)} + 链层专有码 {len(STEP_CODES - sub_codes)} = {len(all_codes)}",
       len(all_codes) == len(sub_codes | STEP_CODES))
 print(f"[REG ] G3 链层专有码 ×{len(STEP_CODES - sub_codes)}（无 T 子例，由 M3 链层用例覆盖）")
+
+# --- 链层用例契约登记完整性（L1–L5）：登记即契约，执行仍待 M3 ---
+chain_ids = [c["id"] for c in CHAIN_CONTRACTS]
+check("G3e 链层用例契约登记连续（L1–L{n}）",
+      chain_ids == [f"L{i}" for i in range(1, len(chain_ids) + 1)], str(chain_ids))
+check("G3f 链层契约错误码均属八步链码表",
+      all(c["code"] in STEP_CODES for c in CHAIN_CONTRACTS),
+      str(sorted({c["code"] for c in CHAIN_CONTRACTS} - STEP_CODES)))
+REQUIRED_CHAIN = {"PLAN_UNBOUND", "DOI_NOT_IN_MANIFEST", "BACKBONE_GRADE_VIOLATION",
+                  "SCHEMA_FAIL", "TRANSITION_INVALID"}
+chain_codes = {c["code"] for c in CHAIN_CONTRACTS}
+missing_chain = sorted(REQUIRED_CHAIN - chain_codes)
+check("G3g 链层契约覆盖三通道（method/context/framing）+ 两条凭证规则",
+      chain_codes == REQUIRED_CHAIN, f"缺 {missing_chain} / 多 {sorted(chain_codes - REQUIRED_CHAIN)}")
+for c in CHAIN_CONTRACTS:
+    print(f"[REG ] G3 链层契约 {c['id']}：{c['name']} → {c['step']} {c['code']}")
 
 
 # ============ G4 确定性层（JCS = RFC 8785）============

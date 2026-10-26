@@ -28,7 +28,7 @@
 ├── tools/
 │   ├── jcs.py                            # RFC 8785 JCS（确定性序列化，35 官方向量自测）
 │   ├── gen_composites.py                 # 复合件生成器（--check / --write）
-│   ├── validate_freeze.py                # 冻结门禁 G1–G4（79 项断言，退出码 0/1/2）
+│   ├── validate_freeze.py                # 冻结门禁 G1–G4（82 项断言，退出码 0/1/2）
 │   ├── check_cross_refs.py               # 版本对偶绑定校验（文档 ↔ 文档 ↔ schemas/）
 │   ├── check_docs_consistency.py         # 文档口径机检（计数/枚举/版本/错误码/视图）
 │   ├── gen_docs_views.py                 # 交付物内嵌 JSON 视图生成/校验（--check / --write）
@@ -58,7 +58,7 @@
 
 ## 四层门禁 G1–G4
 
-`python tools/validate_freeze.py` 一次跑完四层，共 **79 项断言**（G1: 42 / G2: 23 / G3: 4 / G4: 10）；链层 5 项契约登记为 `REG`（不参与断言计数，待 M3 验收）。
+`python tools/validate_freeze.py` 一次跑完四层，共 **82 项断言**（G1: 42 / G2: 23 / G3: 7 / G4: 10）；链层契约 L1–L5 按结构化登记校验完整性（G3e–G3g，契约本体 `tools/freeze_codes.py::CHAIN_CONTRACTS`），行为验收待 M3 回填，不参与断言计数。
 
 | 层 | 判据（含义） | 覆盖要点 | 实测 |
 |---|---|---|---|
@@ -73,7 +73,7 @@
 |---|---|---|
 | 1 | `python tools/jcs.py --selftest` | RFC 8785 实现（35 向量，35/35） |
 | 2 | `python tools/gen_composites.py --check` | 复合件与生成结果一致（2 件） |
-| 3 | `python tools/validate_freeze.py` | 四层判据 G1–G4（79 断言） |
+| 3 | `python tools/validate_freeze.py` | 四层判据 G1–G4（82 断言） |
 | 4 | `python tools/check_cross_refs.py` | 版本对偶绑定（文档 ↔ 文档 ↔ schemas/） |
 | 5 | `python tools/check_docs_consistency.py` | 文档口径一致性（计数/枚举/旧版本残留/错误码/内嵌视图，依赖 `gen_docs_views.py --check`） |
 
@@ -114,7 +114,7 @@ python tools/check_cross_refs.py
 python tools/check_docs_consistency.py
 ```
 
-预期终态输出摘要：`jcs 35/35 passed`、复合件 2 件一致、`冻结门禁：全绿（79 项断言；G1: 42 / G2: 23 / G3: 4 / G4: 10；链层用例契约 5 项待 M3）`、版本对偶校验全绿、文档一致性全绿（含 3 处内嵌视图 `gen_docs_views.py --check`）。当前若仍有门禁为红，以 `run_gates.sh` 汇总为准。
+预期终态输出摘要：`jcs 35/35 passed`、复合件 2 件一致、`冻结门禁：全绿（82 项断言；G1: 42 / G2: 23 / G3: 7 / G4: 10；链层用例契约 5 项待 M3）`、版本对偶校验全绿、文档一致性全绿（含 3 处内嵌视图 `gen_docs_views.py --check`）。当前若仍有门禁为红，以 `run_gates.sh` 汇总为准。
 
 仅在基础 schema 变更后需要重新生成复合件（会覆写 `schemas/`，正常提交前必须跑 `--check` 确认）：
 
@@ -135,7 +135,7 @@ python tools/gen_docs_views.py --write   # 同步交付物内嵌视图
 ## 状态与边界
 
 - **阶段 1 = 规格冻结**：本包交付「冻结对象 + 冻结判据」，**无运行时实现**——ledger-mcp、六道 rail（ClaimCardRail / AuditRail / CitationGate / …）、沙箱执行、编排流水线均未实现。
-- **登记未实现项**：G2 链层用例契约 5 项、G3 链层专有错误码 8 项以 `REG` 登记，待 ledger-mcp 落地后由 **M3** 验收；不计入 79 项断言。
+- **登记未实现项**：链层契约 L1–L5（八步链专有错误码 8 项）以 `REG` 登记，门禁校验登记完整性；行为待 ledger-mcp 落地后由 **M3** 验收，不计入 82 项断言。
 - **视图即生成物**：交付物 §1.2 / §1.6 / §1.7 的 JSON 视图块由 `tools/gen_docs_views.py` 机生成，`--check` 已入门禁，禁止手改。
 - **非发行包**：`pyproject.toml` 只用于锁定依赖与 Python 版本（`packages = []`），不产出可安装包、不发布。
 - **会话遥测不入库**：`.dsh-ops/`（DSH 会话面板/遥测）已在 `.gitignore` 中排除，不属于项目产物。

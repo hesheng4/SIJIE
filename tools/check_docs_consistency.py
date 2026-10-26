@@ -12,7 +12,8 @@
   C5 错误码：反引号内的大写码必须来自 tools/freeze_codes.py 的码表（禁止自造码）；
   C6 八步链覆盖：§1.3 章节内出现全部链层错误码；
   C7 视图：gen_docs_views.py --check 必须全绿（三块 = 权威源投影）；
-  C8 结构：交付物 §一–§十一 与 1.1–1.9 齐全；总纲 D 表连续且标题范围与表一致。
+  C8 结构：交付物 §一–§十一 与 1.1–1.9 齐全；总纲 D 表连续且标题范围与表一致；
+  C9 链层契约：L1–L5 在交付物中逐条登记，且每行同时出现码表规定的错误码。
 退出码：0 全绿；1 有失败；2 结构/依赖异常。
 """
 from __future__ import annotations
@@ -31,6 +32,8 @@ S = ROOT / "schemas"
 DOC = ROOT / "阶段1交付物-声明卡Schema与反例测试规格.md"
 MASTER = ROOT / "科研智能体总体方案.md"
 sys.path.insert(0, str(TOOLS))
+
+from freeze_codes import CHAIN_CONTRACTS, all_codes  # noqa: E402  错误码/契约单一事实源
 
 for _stream in (sys.stdout, sys.stderr):
     try:
@@ -224,6 +227,14 @@ if d_nums:
           f"标题 {title.group(1) if title else '未找到'} / 表尾 D{d_nums[-1]}")
 else:
     check("C8 总纲 D 表可解析", False, "未匹配到 | D数字 | 行")
+
+# ---------- C9 链层用例契约 L1–L5 文档-码表对偶 ----------
+for c in CHAIN_CONTRACTS:
+    hit = [ln for ln in doc_body.split("\n") if c["id"] in ln and c["code"] in ln]
+    check(f"C9 链层契约 {c['id']} {c['code']} 已登记（同行为证）", bool(hit),
+          f"未找到「{c['id']} … {c['code']}」同行的登记行")
+check("C9 链层契约登记数 == 码表 CHAIN_CONTRACTS 数",
+      len({c["id"] for c in CHAIN_CONTRACTS}) == 5, str([c["id"] for c in CHAIN_CONTRACTS]))
 
 # ---------- 汇总 ----------
 print()

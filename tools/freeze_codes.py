@@ -35,12 +35,55 @@ STEP_CODES: set[str] = {
 }
 
 # schema 层判定不了、须由 ledger-mcp 实现并在 M3 验收的链层用例契约。
+# 结构化登记：id 连续（L1–L5），每条绑定「适用通道/规则 → 拦截步 → 错误码 → M3 验收点」。
+# 门禁 G3 只校验登记完整性（id 连续、码属八步链、五个典型通道/规则各一），
+# 真正的链层执行由 M3 的 ledger-mcp 实现验收——登记即契约，不占 PASS 计数。
+CHAIN_CONTRACTS: list[dict[str, str]] = [
+    {
+        "id": "L1",
+        "name": "method 通道：plan_ref 不可解析",
+        "rule": "method 卡必须绑定 plan_ref（schema 只判非空，不判可解析）",
+        "step": "步4",
+        "code": "PLAN_UNBOUND",
+        "m3": "ledger-mcp 计划注册表查无该 plan_ref → 拒绝合并并落 PLAN_UNBOUND",
+    },
+    {
+        "id": "L2",
+        "name": "context 通道：条目不属当前轮",
+        "rule": "context 卡 citation_refs 的 manifest_entry_id 须属本轮 MANIFEST（schema 只判必填）",
+        "step": "步6",
+        "code": "DOI_NOT_IN_MANIFEST",
+        "m3": "本轮 MANIFEST 无该条目 → 拒绝并落 DOI_NOT_IN_MANIFEST",
+    },
+    {
+        "id": "L3",
+        "name": "framing 通道：指向 T3 档位条目",
+        "rule": "framing 卡 framing_ref 须为 backbone 档（schema 只判必填）",
+        "step": "步6",
+        "code": "BACKBONE_GRADE_VIOLATION",
+        "m3": "档位矩阵校验 framing_ref.curation_grade 非 backbone 档 → 拒绝并落该码",
+    },
+    {
+        "id": "L4",
+        "name": "凭证规则：transition 缺 on_behalf_of_role",
+        "rule": "to=superseded 必带 on_behalf_of_role（1.4.0 起 schema 已可判定）",
+        "step": "步1",
+        "code": "SCHEMA_FAIL",
+        "m3": "schema 已拦截；M3 只需回归确认链层不复判、不产生第二来源",
+    },
+    {
+        "id": "L5",
+        "name": "凭证规则：首行 created_by_role ≠ 凭证 on_behalf_of_role",
+        "rule": "R-08 代签一致性（需比对签发凭证，schema 不可判定）",
+        "step": "步4",
+        "code": "TRANSITION_INVALID",
+        "m3": "凭证 rail 的 on_behalf_of_role 与行 lineage.created_by_role 不符 → 落该码",
+    },
+]
+
+# 供门禁打印与文档口径复用的摘要行（由 CHAIN_CONTRACTS 派生，不手写第二份）。
 CHAIN_CASES: list[str] = [
-    "method 拒B·plan_ref 不可解析 → 步4 PLAN_UNBOUND",
-    "context 拒B·条目不属当前轮 → 步6 DOI_NOT_IN_MANIFEST",
-    "framing 拒B·指向 T3 条目 → 步6 BACKBONE_GRADE_VIOLATION",
-    "transition 拒·缺 on_behalf_of_role → 步1 SCHEMA_FAIL（1.4.0 起 schema 可判定）",
-    "首行 created_by_role ≠ 凭证 on_behalf_of_role → 步4 TRANSITION_INVALID（R-08）",
+    f"{c['id']} {c['name']} → {c['step']} {c['code']}" for c in CHAIN_CONTRACTS
 ]
 
 
