@@ -1,0 +1,661 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ClaimRow",
+  "version": "1.1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "row_id",
+    "row_seq",
+    "claimcard_schema_version",
+    "card",
+    "appended_at",
+    "audit_event_id",
+    "manifest_version",
+    "venue_profile_version"
+  ],
+  "properties": {
+    "row_id": {
+      "type": "string",
+      "pattern": "^row_[abcdef0123456789]{16}$"
+    },
+    "row_seq": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "声明链时序键（当前态=同 claim_id 最大 row_seq 行）"
+    },
+    "claimcard_schema_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "card": {
+      "$ref": "#/definitions/ClaimCard"
+    },
+    "appended_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "仅人读；不参与 row_id 派生与排序"
+    },
+    "audit_event_id": {
+      "type": "string",
+      "pattern": "^evt_[abcdef0123456789]{16}$"
+    },
+    "manifest_version": {
+      "type": "string"
+    },
+    "venue_profile_version": {
+      "type": "string"
+    }
+  },
+  "definitions": {
+    "ClaimCard": {
+      "title": "ClaimCard",
+      "version": "1.3.0",
+      "type": "object",
+      "required": [
+        "claim_id",
+        "claim_type",
+        "claim_text",
+        "status",
+        "confidence",
+        "lineage"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "claim_id": {
+          "type": "string",
+          "pattern": "^clm_[a-f0-9]{16}$"
+        },
+        "claim_type": {
+          "enum": [
+            "result",
+            "method",
+            "context",
+            "framing"
+          ]
+        },
+        "claim_text": {
+          "type": "string",
+          "minLength": 8
+        },
+        "status": {
+          "enum": [
+            "active",
+            "rejected",
+            "superseded",
+            "compression_orphan"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "confirmatory",
+            "exploratory"
+          ]
+        },
+        "evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sandbox_execution_id",
+            "script_hash",
+            "output_hashes"
+          ],
+          "properties": {
+            "sandbox_execution_id": {
+              "type": "string",
+              "pattern": "^exec_[a-f0-9]{16}$"
+            },
+            "script_hash": {
+              "type": "string",
+              "pattern": "^sha256:[a-f0-9]{64}$"
+            },
+            "plan_ref": {
+              "type": "string",
+              "pattern": "^pln_[a-f0-9]{12}$"
+            },
+            "data_refs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "data_hash",
+                  "manifest_entry_id"
+                ],
+                "properties": {
+                  "data_hash": {
+                    "type": "string",
+                    "pattern": "^sha256:[a-f0-9]{64}$"
+                  },
+                  "manifest_entry_id": {
+                    "type": "string",
+                    "pattern": "^mfe_[a-f0-9]{12}$"
+                  }
+                }
+              }
+            },
+            "output_hashes": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "pattern": "^sha256:[a-f0-9]{64}$"
+              }
+            },
+            "figure_hashes": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^sha256:[a-f0-9]{64}$"
+              }
+            },
+            "values": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "output_index",
+                  "pointer",
+                  "value",
+                  "comparison"
+                ],
+                "properties": {
+                  "output_index": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "pointer": {
+                    "type": "string",
+                    "pattern": "^(csv:|/)"
+                  },
+                  "value": {
+                    "type": [
+                      "number",
+                      "string"
+                    ]
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "comparison": {
+                    "enum": [
+                      "exact",
+                      "float_rel"
+                    ]
+                  },
+                  "tolerance": {
+                    "type": "number",
+                    "exclusiveMinimum": 1e-15,
+                    "maximum": 1e-06
+                  },
+                  "csv_cast": {
+                    "enum": [
+                      "as_string",
+                      "as_number"
+                    ],
+                    "default": "as_number"
+                  }
+                },
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "comparison": {
+                          "const": "float_rel"
+                        }
+                      },
+                      "required": [
+                        "comparison"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "tolerance"
+                      ]
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "comparison": {
+                          "const": "exact"
+                        }
+                      },
+                      "required": [
+                        "comparison"
+                      ]
+                    },
+                    "then": {
+                      "not": {
+                        "required": [
+                          "tolerance"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "framing_ref": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "survey_doi",
+            "manifest_entry_id",
+            "locator"
+          ],
+          "properties": {
+            "survey_doi": {
+              "type": "string",
+              "pattern": "^10\\."
+            },
+            "manifest_entry_id": {
+              "type": "string",
+              "pattern": "^mfe_[a-f0-9]{12}$"
+            },
+            "locator": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "citation_refs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "doi",
+              "manifest_entry_id",
+              "verification",
+              "locator"
+            ],
+            "properties": {
+              "doi": {
+                "type": "string",
+                "pattern": "^10\\."
+              },
+              "manifest_entry_id": {
+                "type": "string",
+                "pattern": "^mfe_[a-f0-9]{12}$"
+              },
+              "locator": {
+                "type": "string",
+                "minLength": 1
+              },
+              "verification": {
+                "enum": [
+                  "primary",
+                  "survey_transfer"
+                ]
+              },
+              "survey_doi": {
+                "type": "string",
+                "pattern": "^10\\."
+              },
+              "snapshot_ref": {
+                "type": "string",
+                "pattern": "^sha256:[a-f0-9]{64}$"
+              }
+            }
+          }
+        },
+        "lineage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "created_by_role",
+            "created_at",
+            "run_id"
+          ],
+          "properties": {
+            "created_by_role": {
+              "enum": [
+                "analyst",
+                "writing",
+                "librarian",
+                "reviewer",
+                "auditor"
+              ]
+            },
+            "credential_kind": {
+              "enum": [
+                "rail",
+                "hitl"
+              ]
+            },
+            "created_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "run_id": {
+              "type": "string",
+              "pattern": "^run_[a-z0-9_-]{6,64}$"
+            },
+            "derived_from": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^clm_[a-f0-9]{16}$"
+              }
+            },
+            "is_revival": {
+              "type": "boolean",
+              "default": false
+            },
+            "revival_reason": {
+              "type": "string",
+              "minLength": 8
+            },
+            "deviation_note": {
+              "type": "string"
+            },
+            "transition": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "from",
+                "to",
+                "by_role",
+                "reason",
+                "audit_event_id"
+              ],
+              "properties": {
+                "from": {
+                  "const": "active"
+                },
+                "to": {
+                  "enum": [
+                    "rejected",
+                    "superseded",
+                    "compression_orphan"
+                  ]
+                },
+                "by_role": {
+                  "enum": [
+                    "auditor",
+                    "gate_rail",
+                    "hitl",
+                    "compression_protocol"
+                  ]
+                },
+                "on_behalf_of_role": {
+                  "enum": [
+                    "analyst",
+                    "writing",
+                    "librarian",
+                    "reviewer",
+                    "auditor",
+                    "coordinator",
+                    "hitl"
+                  ]
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 4
+                },
+                "credential_kind": {
+                  "enum": [
+                    "rail",
+                    "hitl",
+                    "compression"
+                  ]
+                },
+                "audit_event_id": {
+                  "type": "string",
+                  "pattern": "^evt_[a-f0-9]{16}$"
+                }
+              },
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "to": {
+                        "const": "rejected"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "by_role": {
+                        "enum": [
+                          "auditor",
+                          "gate_rail",
+                          "hitl"
+                        ]
+                      },
+                      "credential_kind": {
+                        "enum": [
+                          "rail",
+                          "hitl"
+                        ]
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "to": {
+                        "const": "superseded"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "by_role": {
+                        "enum": [
+                          "gate_rail",
+                          "auditor"
+                        ]
+                      },
+                      "credential_kind": {
+                        "const": "rail"
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "to": {
+                        "const": "compression_orphan"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "by_role": {
+                        "const": "compression_protocol"
+                      },
+                      "credential_kind": {
+                        "const": "compression"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "lineage": {
+                "required": [
+                  "transition"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "rejected",
+                  "superseded",
+                  "compression_orphan"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "lineage": {
+                "required": [
+                  "is_revival"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "lineage": {
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "is_revival": {
+                          "const": true
+                        }
+                      }
+                    },
+                    "then": {
+                      "required": [
+                        "revival_reason",
+                        "derived_from",
+                        "credential_kind"
+                      ],
+                      "properties": {
+                        "credential_kind": {
+                          "const": "hitl"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "claim_type": {
+                "const": "result"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "evidence"
+            ],
+            "properties": {
+              "evidence": {
+                "required": [
+                  "sandbox_execution_id",
+                  "script_hash",
+                  "plan_ref",
+                  "output_hashes",
+                  "data_refs",
+                  "values"
+                ],
+                "properties": {
+                  "data_refs": {
+                    "minItems": 1
+                  },
+                  "values": {
+                    "minItems": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "claim_type": {
+                "const": "method"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "evidence"
+            ],
+            "properties": {
+              "evidence": {
+                "required": [
+                  "sandbox_execution_id",
+                  "script_hash",
+                  "plan_ref"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "claim_type": {
+                "const": "context"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "citation_refs"
+            ],
+            "properties": {
+              "citation_refs": {
+                "minItems": 1,
+                "contains": {
+                  "properties": {
+                    "verification": {
+                      "const": "primary"
+                    }
+                  },
+                  "required": [
+                    "verification"
+                  ]
+                }
+              }
+            },
+            "not": {
+              "required": [
+                "evidence"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "claim_type": {
+                "const": "framing"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "framing_ref"
+            ],
+            "not": {
+              "required": [
+                "evidence"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,502 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Contracts",
+  "version": "1.1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_id",
+    "schema_version",
+    "from_role",
+    "to_role",
+    "stage",
+    "run_id",
+    "created_at",
+    "payload"
+  ],
+  "properties": {
+    "contract_id": {
+      "type": "string",
+      "pattern": "^ctr_[a-f0-9]{12}$"
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "from_role": {
+      "enum": [
+        "coordinator",
+        "intake-curator",
+        "librarian",
+        "analyst",
+        "writing",
+        "reviewer-1",
+        "reviewer-2",
+        "reviewer-3",
+        "ac",
+        "auditor",
+        "profile-curator"
+      ]
+    },
+    "to_role": {
+      "enum": [
+        "coordinator",
+        "intake-curator",
+        "librarian",
+        "analyst",
+        "writing",
+        "reviewer-1",
+        "reviewer-2",
+        "reviewer-3",
+        "ac",
+        "auditor",
+        "profile-curator"
+      ]
+    },
+    "stage": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^run_[a-z0-9_-]{6,64}$"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "payload": {
+      "oneOf": [
+        {
+          "$ref": "#/definitions/C1"
+        },
+        {
+          "$ref": "#/definitions/C2"
+        },
+        {
+          "$ref": "#/definitions/C3"
+        },
+        {
+          "$ref": "#/definitions/C4"
+        },
+        {
+          "$ref": "#/definitions/C5"
+        },
+        {
+          "$ref": "#/definitions/C6"
+        },
+        {
+          "$ref": "#/definitions/C7"
+        },
+        {
+          "$ref": "#/definitions/C8"
+        }
+      ]
+    }
+  },
+  "definitions": {
+    "C1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifest_version",
+        "semantics_handle",
+        "knowledge_map_handle",
+        "venue_profile_version"
+      ],
+      "properties": {
+        "manifest_version": {
+          "type": "string"
+        },
+        "semantics_handle": {
+          "type": "string"
+        },
+        "knowledge_map_handle": {
+          "type": "string"
+        },
+        "venue_profile_version": {
+          "type": "string"
+        }
+      }
+    },
+    "C2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claim_ids",
+        "figure_refs",
+        "citation_requests"
+      ],
+      "properties": {
+        "claim_ids": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^clm_"
+          }
+        },
+        "figure_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "citation_requests": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "C3": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "citation_cards"
+      ],
+      "properties": {
+        "citation_cards": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "doi",
+              "manifest_entry_id",
+              "verification",
+              "locator"
+            ],
+            "properties": {
+              "doi": {
+                "type": "string",
+                "pattern": "^10\\."
+              },
+              "manifest_entry_id": {
+                "type": "string",
+                "pattern": "^mfe_[a-f0-9]{12}$"
+              },
+              "verification": {
+                "enum": [
+                  "primary",
+                  "survey_transfer"
+                ]
+              },
+              "survey_doi": {
+                "type": "string",
+                "pattern": "^10\\."
+              },
+              "locator": {
+                "type": "string",
+                "minLength": 1
+              },
+              "snapshot_ref": {
+                "type": "string",
+                "pattern": "^sha256:[a-f0-9]{64}$"
+              }
+            }
+          }
+        }
+      }
+    },
+    "C4": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manuscript_ref",
+        "claim_ids",
+        "figure_refs",
+        "venue_profile_version"
+      ],
+      "properties": {
+        "manuscript_ref": {
+          "type": "string"
+        },
+        "claim_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "figure_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "venue_profile_version": {
+          "type": "string"
+        }
+      },
+      "description": "双盲白名单：注入 rawlog_path/execution_id/data_file 等字段一律 SCHEMA_FAIL"
+    },
+    "C5": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "review_form"
+      ],
+      "properties": {
+        "review_form": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "登记例外：子 schema 由 venue 档案 review 段运行时装配"
+        },
+        "rebuttal": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "point",
+            "response"
+          ],
+          "properties": {
+            "point": {
+              "type": "string"
+            },
+            "response": {
+              "type": "string"
+            }
+          }
+        },
+        "reviewer_model": {
+          "type": "string"
+        }
+      }
+    },
+    "C6": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manuscript_ref",
+        "claims_snapshot_version"
+      ],
+      "properties": {
+        "manuscript_ref": {
+          "type": "string"
+        },
+        "claims_snapshot_version": {
+          "type": "string"
+        }
+      }
+    },
+    "C7": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "report_ref",
+        "conclusions",
+        "exclusion_list"
+      ],
+      "properties": {
+        "report_ref": {
+          "type": "string"
+        },
+        "conclusions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "passed",
+            "failed",
+            "undetermined"
+          ],
+          "properties": {
+            "passed": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "failed": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "undetermined": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "exclusion_list": {
+          "$ref": "#/definitions/ExclusionList"
+        }
+      }
+    },
+    "C8": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lesson",
+        "scope",
+        "evidence_run_id",
+        "source_run_status"
+      ],
+      "properties": {
+        "lesson": {
+          "type": "string"
+        },
+        "scope": {
+          "enum": [
+            "venue",
+            "task",
+            "global"
+          ]
+        },
+        "evidence_run_id": {
+          "type": "string"
+        },
+        "source_run_status": {
+          "enum": [
+            "success",
+            "failed",
+            "partial"
+          ]
+        }
+      }
+    },
+    "ExclusionList": {
+      "title": "ExclusionList",
+      "version": "1.0.2",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_run_id",
+        "generated_at",
+        "rejected_claims",
+        "tainted_executions",
+        "phantom_events",
+        "orphans",
+        "vetoed_directions",
+        "manifest_decision"
+      ],
+      "properties": {
+        "source_run_id": {
+          "type": "string"
+        },
+        "generated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "rejected_claims": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^clm_"
+          }
+        },
+        "tainted_executions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^exec_"
+          }
+        },
+        "phantom_events": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^evt_"
+          }
+        },
+        "orphans": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^clm_"
+          }
+        },
+        "vetoed_directions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "ref",
+              "reason",
+              "veto_by"
+            ],
+            "properties": {
+              "kind": {
+                "enum": [
+                  "analysis",
+                  "citation"
+                ]
+              },
+              "ref": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "veto_by": {
+                "enum": [
+                  "hitl",
+                  "auditor"
+                ]
+              }
+            }
+          }
+        },
+        "revival_permits": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^clm_[a-f0-9]{16}$"
+          },
+          "description": "1.0.2 新增：HITL 批准的复活谱系——这些 id 允许出现在新卡 derived_from（§1.5 复活三条件）；仍禁作证据"
+        },
+        "manifest_decision": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "reused"
+              ],
+              "properties": {
+                "reused": {
+                  "type": "string"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "created",
+                "reason",
+                "triggered_by",
+                "hitl_confirmed"
+              ],
+              "properties": {
+                "created": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                },
+                "triggered_by": {
+                  "enum": [
+                    "data_changed",
+                    "hitl",
+                    "auditor"
+                  ]
+                },
+                "hitl_confirmed": {
+                  "type": "boolean",
+                  "const": true
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

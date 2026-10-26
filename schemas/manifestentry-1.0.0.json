@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ManifestEntry",
+  "version": "1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["manifest_entry_id", "kind", "curation_grade"],
+  "properties": {
+    "manifest_entry_id": {"type": "string", "pattern": "^mfe_[a-f0-9]{12}$"},
+    "kind": {"enum": ["data", "literature"]},
+    "curation_grade": {"enum": ["user_provided", "T1", "T2", "T3"]},
+    "sha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$",
+      "description": "kind=data 时必填（R-09，链层）；kind=literature 时为综述/快照产物 hash"},
+    "doi": {"type": "string", "pattern": "^10\\.",
+      "description": "kind=literature 时必填（R-09，链层）"},
+    "role": {"enum": ["backbone", "primary", "supporting"]},
+    "snapshot_ref": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "semantics_handle": {"type": "string"},
+    "provenance": {"type": "object", "additionalProperties": false,
+      "description": "curation_grade=T2 时三字段必填（R-10，链层）——兑现 D6 可归因主张",
+      "properties": {
+        "query_path_ref": {"type": "string"},
+        "retriever_version": {"type": "string"},
+        "exclusion_reason": {"type": "string"}}}
+  }
+}
