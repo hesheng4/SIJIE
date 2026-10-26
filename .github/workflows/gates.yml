@@ -1,0 +1,47 @@
+name: gates
+
+# 阶段 1 冻结候选包的门禁 CI：只做校验，不部署、不发版。
+# 本地等价命令：bash run_gates.sh（Windows git-bash / WSL / Ubuntu 通用）。
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  gates:
+    name: freeze-gates / ${{ matrix.os }} / py${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+        python-version:
+          - "3.12"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # 门禁唯一硬依赖，版本与 pyproject.toml 的 dependencies 钉死一致。
+      # date-time 断言由 tools/validate_freeze.py 自实现，故不装 rfc3339-validator。
+      - name: Install gates dependency
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "jsonschema==4.26.0"
+
+      - name: Run freeze gates
+        shell: bash
+        run: bash run_gates.sh
+        env:
+          PYTHONIOENCODING: utf-8
+          PYTHONUTF8: "1"

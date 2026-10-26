@@ -2,13 +2,15 @@
 """gen_composites.py — 生成复合 schema 文件（D26 权威源机制的一部分）。
 
 从基础 schema 生成两个复合文件，保证 definitions 内嵌、$ref 全部本地可解析：
-  schemas/claimrow-1.1.0.json   = ClaimRow 结构 + definitions.ClaimCard（全文内嵌）
+  schemas/claimrow-1.2.0.json   = ClaimRow 结构 + definitions.ClaimCard（全文内嵌 1.4.0）
   schemas/contracts-1.1.0.json  = 契约信封 + definitions.C1..C8 + definitions.ExclusionList（全文内嵌）
 
-复合文件是权威源；本生成器只在基础文件变更后由 CI 重新执行并 diff 校验。
+复合文件是权威源；基础文件变更后必须重新生成。默认行为是 --check（只读比对，
+不一致即非零退出，供 CI/门禁使用）；只有显式 --write 才覆写权威文件。
 """
 import json
 import pathlib
+import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 S = ROOT / "schemas"
@@ -32,13 +34,16 @@ def id_pat(prefix: str) -> str:
     return "^" + prefix + "[" + HEX_CLS + "]{16}$"
 
 
-def gen_claimrow() -> None:
-    card = load("claimcard-1.3.0.json")
+def build_claimrow() -> tuple[str, dict]:
+    card = load("claimcard-1.4.0.json")
     card.pop("$schema", None)  # 嵌套 definitions 不携带独立 $schema
+    # $ref 是文档相对的：ClaimCard 内的 #/definitions/Role 必须在 ClaimRow 根上可解析，
+    # 故把嵌套 definitions 提升到复合件根（1.4.0 引入 Role 后必需；否则引用悬空）。
+    nested_defs = card.pop("definitions", {})
     claimrow = {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "title": "ClaimRow",
-        "version": "1.1.0",
+        "version": "1.2.0",
         "type": "object",
         "additionalProperties": False,
         "required": ["row_id", "row_seq", "claimcard_schema_version", "card", "appended_at",
@@ -47,19 +52,21 @@ def gen_claimrow() -> None:
             "row_id": {"type": "string", "pattern": id_pat("row_")},
             "row_seq": {"type": "integer", "minimum": 0,
                         "description": "声明链时序键（当前态=同 claim_id 最大 row_seq 行）"},
-            "claimcard_schema_version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
+            "claimcard_schema_version": {
+                "const": card["version"],
+                "description": "与 definitions.ClaimCard 版本绑定（1.2.0 起因内嵌即权威，防混版本声明链）"},
             "card": {"$ref": "#/definitions/ClaimCard"},
             "appended_at": {"type": "string", "format": "date-time",
                             "description": "仅人读；不参与 row_id 派生与排序"},
             "audit_event_id": {"type": "string", "pattern": id_pat("evt_")},
             "manifest_version": {"type": "string"},
             "venue_profile_version": {"type": "string"}},
-        "definitions": {"ClaimCard": card},
+        "definitions": {"ClaimCard": card, **nested_defs},
     }
-    dump(claimrow, "claimrow-1.1.0.json")
+    return "claimrow-1.2.0.json", claimrow
 
 
-def gen_contracts() -> None:
+def build_contracts() -> tuple[str, dict]:
     excl = load("exclusionlist-1.0.2.json")
     excl.pop("$schema", None)
 
@@ -152,10 +159,30 @@ def gen_contracts() -> None:
         "definitions": {
             "C1": c1, "C2": c2, "C3": c3, "C4": c4, "C5": c5, "C6": c6, "C7": c7, "C8": c8,
             "ExclusionList": excl}}
-    dump(contracts, "contracts-1.1.0.json")
+    return "contracts-1.1.0.json", contracts
+
+
+def main(argv: list[str]) -> int:
+    write = "--write" in argv
+    if not write and "--check" not in argv:
+        print("usage: gen_composites.py --check | --write")
+        return 2
+    bad = []
+    for name, obj in (build_claimrow(), build_contracts()):
+        if write:
+            dump(obj, name)
+            print("[WRITE] " + name)
+            continue
+        got = json.loads((S / name).read_text(encoding="utf-8"))
+        ok = got == obj
+        print(("[PASS] " if ok else "[FAIL] ") + "复合件与生成结果一致: " + name)
+        if not ok:
+            bad.append(name)
+    if write:
+        print("composites regenerated: claimrow-1.2.0.json, contracts-1.1.0.json")
+        return 0
+    return 0 if not bad else 1
 
 
 if __name__ == "__main__":
-    gen_claimrow()
-    gen_contracts()
-    print("composites regenerated: claimrow-1.1.0.json, contracts-1.1.0.json")
+    raise SystemExit(main(sys.argv[1:]))

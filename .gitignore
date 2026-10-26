@@ -1,0 +1,21 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# ---- 构建产物 ----
+build/
+dist/
+
+# ---- 会话遥测（D:\HuaWei 下 DSH 面板写入，不属于项目产物，不得入库）----
+.dsh-ops/
+
+# ---- 编辑器 / 操作系统 ----
+.DS_Store
+Thumbs.db
+
+# ---- 日志 ----
+*.log

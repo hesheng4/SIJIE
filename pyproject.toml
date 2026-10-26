@@ -1,0 +1,37 @@
+# 阶段 1 冻结候选包 —— 依赖与环境元数据
+#
+# 非发行包（non-package）：本仓库交付物是「规格冻结候选包」——6 件 JSON Schema、
+# 两份 Markdown 规格与 tools/ 门禁脚本，不产出可安装的 Python 包（packages = []）。
+# 本文件存在的目的：
+#   1) 锁定门禁唯一运行时硬依赖 jsonschema==4.26.0；
+#   2) 声明工具链最低 Python 版本（CI 实测 3.12，本地开发 3.11–3.14 均可）；
+#   3) 给 CI / 本地环境一个单一声明源（.github/workflows/gates.yml 按此钉版本）。
+#
+# 注意：门禁的 date-time 格式断言由 tools/validate_freeze.py 自实现
+# （强制覆写 FormatChecker），因此**不依赖** rfc3339-validator。
+# jsonschema==4.26.0 是门禁实测版本（本地 Python 3.14 + jsonschema 4.26.0 全绿）。
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "research-agent-freeze-stage1"
+version = "0.1.0"
+description = "WorkSwarm 论文生成系统 · 阶段1冻结候选包（声明卡 Schema 族 + 四层门禁）"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "jsonschema==4.26.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.setuptools]
+packages = []
+
+[tool.pytest.ini_options]
+testpaths = []
