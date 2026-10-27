@@ -32,7 +32,11 @@
 │   ├── check_cross_refs.py               # 版本对偶绑定校验（文档 ↔ 文档 ↔ schemas/）
 │   ├── check_docs_consistency.py         # 文档口径机检（计数/枚举/版本/错误码/视图）
 │   ├── gen_docs_views.py                 # 交付物内嵌 JSON 视图生成/校验（--check / --write）
-│   └── freeze_codes.py                   # 错误码单一码表
+│   ├── freeze_codes.py                   # 错误码单一码表
+│   └── m1_acceptance.py                  # M1 最小闭环行为验收（31 项断言，GATE 6）
+├── m1/
+│   ├── __init__.py                       # M1 包导出
+│   └── ledger.py                          # M1 参考实现：hash 绑定 / 行级幂等 / WAL 双写 / 双源对账
 ├── run_gates.sh                          # 门禁统一入口（bash；git-bash / WSL / Ubuntu）
 ├── .github/workflows/gates.yml           # CI：ubuntu + windows × Python 3.12
 ├── pyproject.toml                        # 依赖元数据（jsonschema==4.26.0；非发行包）
@@ -76,6 +80,7 @@
 | 3 | `python tools/validate_freeze.py` | 四层判据 G1–G4（82 断言） |
 | 4 | `python tools/check_cross_refs.py` | 版本对偶绑定（文档 ↔ 文档 ↔ schemas/） |
 | 5 | `python tools/check_docs_consistency.py` | 文档口径一致性（计数/枚举/旧版本残留/错误码/内嵌视图，依赖 `gen_docs_views.py --check`） |
+| 6 | `python tools/m1_acceptance.py` | M1 最小闭环行为验收（幂等 / hash 绑定 / WAL 崩溃恢复 / 双源对账 / 重放确定性） |
 
 统一入口：
 
@@ -90,6 +95,30 @@ echo "exit=$?"
 - 每一步打印 `[GATE] 名称`、实际命令、`rc` 与 `PASS/FAIL/MISSING-DEP`，末尾给出汇总表。
 
 > 门禁输出为 UTF-8 中文。`run_gates.sh` 会 `export PYTHONIOENCODING=utf-8`（Windows cp936 控制台必需），并设 `PYTHONDONTWRITEBYTECODE=1` 避免往仓库落 `__pycache__`。手工单跑门禁时请自行设置 `PYTHONIOENCODING=utf-8`。
+
+## M1 最小闭环（`m1/`，可运行参考实现）
+
+规格说「每项声明都要能追溯到数据、执行与产物」，`m1/ledger.py` 把其中**可机检的四件事**做成可跑的实现，供 M3 的 ledger-mcp 直接演化：
+
+| 承诺 | 实现 | 行为证据（GATE 6） |
+|---|---|---|
+| **hash 绑定** | 落账前重算 `script.sha256` 与 `evidence.artifact_sha256`，任一不符即拒 | 脚本被改 → `HASH_MISMATCH`；产物缺失 → `ARTIFACT_UNREACHABLE`；失败不落任何痕迹 |
+| **行级幂等** | `row_id = "row_" + JCS(stable_projection).digest16` | 同内容重复 append 只落一行、只记一条 rawlog 事件；内容变则 id 变 |
+| **WAL 双写** | 写序 rawlog → artifacts → 账本，每步前落 `wal/<row_id>.json` | `rawlog` 后崩溃 → 重启回滚；`rawlog_done` 后崩溃 → 重启补齐；两种情况对账都回到全绿 |
+| **双源对账** | `audit()` 只读重放：链式 `row_hash`、`row_seq` 连续、账本 ↔ rawlog 双射、产物仍在 | 改账本 → `TAMPER_DETECTED`；删 rawlog → `PHANTOM_EVENT`；多出事件 → `UNCOMMITTED_EVENT`；产物被删 → `ARTIFACT_MISSING` |
+
+```python
+from m1.ledger import Ledger, derive_row_id
+
+led = Ledger(".m1store")                       # claims/ + rawlog/ + artifacts/ + wal/
+led.append(record)                             # 幂等：同内容第二次调用不会新增行
+led.append(record)                             # → AppendResult(duplicate=True)
+led.recover()                                  # 崩溃后调用：回滚 pending、补齐 rawlog_done
+led.audit().ok                                 # True = 账本与原始日志一致
+```
+
+**边界（不要过度解读）**：`m1/` 是**最小闭环**，不是 ledger-mcp。八步校验链只实现了 hash 相关子集；ClaimCard 全量 schema 校验、六道 rail、快照与 DOI 校验、`audit_event_id` 签发仍属 M3。对账码 `UNCOMMITTED_EVENT` / `ARTIFACT_MISSING` 是 M1 局部码，未登记进 `tools/freeze_codes.py`，因此不写进冻结文档（避免文档与码表漂移）。
+
 
 ## 本地运行
 
@@ -112,9 +141,10 @@ python tools/gen_composites.py --check
 python tools/validate_freeze.py
 python tools/check_cross_refs.py
 python tools/check_docs_consistency.py
+python tools/m1_acceptance.py
 ```
 
-预期终态输出摘要：`jcs 35/35 passed`、复合件 2 件一致、`冻结门禁：全绿（82 项断言；G1: 42 / G2: 23 / G3: 7 / G4: 10；链层用例契约 5 项待 M3）`、版本对偶校验全绿、文档一致性全绿（含 3 处内嵌视图 `gen_docs_views.py --check`）。当前若仍有门禁为红，以 `run_gates.sh` 汇总为准。
+预期终态输出摘要：`jcs 35/35 passed`、复合件 2 件一致、`冻结门禁：全绿（82 项断言；G1: 42 / G2: 23 / G3: 7 / G4: 10；链层用例契约 5 项待 M3）`、版本对偶校验全绿、文档一致性全绿（含 3 处内嵌视图 `gen_docs_views.py --check`）、`M1 行为验收：全绿（31 项断言；A 幂等 / B hash / C WAL / D 对账 / E 重放）`。当前若仍有门禁为红，以 `run_gates.sh` 汇总为准。
 
 仅在基础 schema 变更后需要重新生成复合件（会覆写 `schemas/`，正常提交前必须跑 `--check` 确认）：
 
@@ -135,6 +165,7 @@ python tools/gen_docs_views.py --write   # 同步交付物内嵌视图
 ## 状态与边界
 
 - **阶段 1 = 规格冻结**：本包交付「冻结对象 + 冻结判据」，**无运行时实现**——ledger-mcp、六道 rail（ClaimCardRail / AuditRail / CitationGate / …）、沙箱执行、编排流水线均未实现。
+  - 例外且已标注边界：`m1/` 是**最小闭环参考实现**（hash 绑定 / 行级幂等 / WAL 双写 / 双源对账四条承诺，31 项行为断言），用于把规格变成可测行为；它不是 ledger-mcp，八步链其余步骤、全量 schema 校验、rail 与快照/DOI 校验仍在 M3。
 - **登记未实现项**：链层契约 L1–L5（八步链专有错误码 8 项）以 `REG` 登记，门禁校验登记完整性；行为待 ledger-mcp 落地后由 **M3** 验收，不计入 82 项断言。
 - **视图即生成物**：交付物 §1.2 / §1.6 / §1.7 的 JSON 视图块由 `tools/gen_docs_views.py` 机生成，`--check` 已入门禁，禁止手改。
 - **非发行包**：`pyproject.toml` 只用于锁定依赖与 Python 版本（`packages = []`），不产出可安装包、不发布。

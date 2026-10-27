@@ -102,6 +102,17 @@ else
   echo
 fi
 
+# M1 最小闭环行为验收：实现缺失时同样只 WARN（规格门禁不该被运行时代码绑架）
+if [ -f tools/m1_acceptance.py ]; then
+  run_gate 6 "m1_acceptance（M1 最小闭环行为验收）" "$PY" tools/m1_acceptance.py
+else
+  echo "---- [GATE 6] m1_acceptance（M1 最小闭环行为验收）----"
+  echo "\$ python tools/m1_acceptance.py"
+  echo "[GATE 6] m1_acceptance ......... WARN（m1/ 或验收脚本缺失，跳过；不计失败）"
+  RESULTS+=("[GATE 6] m1_acceptance = WARN（缺失，跳过）")
+  echo
+fi
+
 # ---------- 汇总 ----------
 echo "========================= 汇总 ========================="
 for r in "${RESULTS[@]}"; do

@@ -81,3 +81,25 @@ python tools/jcs.py --selftest           # RFC 8785 官方向量
 
 **当前全绿口径**：`validate_freeze.py` 82 断言（G1 42 / G2 23 / G3 7 / G4 10）· `check_cross_refs.py` 18 项 ·
 `check_docs_consistency.py` 73 项 · `gen_docs_views.py --check` 3/3 · `gen_composites.py --check` 2 件 · `jcs.py --selftest` 35/35。
+
+## 9. M1 最小闭环（新增运行时代码与 GATE 6）
+
+用户「继续」后，把「规格说能追溯」推进为「可运行的最小闭环」。**冻结对象与版本口径均未改变**（仍 v26 / v1.7.0 / ClaimCard 1.4.0），新增的是运行时代码与其行为门禁：
+
+| 新增 | 内容 | 验收 |
+|---|---|---|
+| `m1/ledger.py` + `m1/__init__.py` | 最小账本：`row_id = "row_" + JCS(stable_projection).digest16`；落账前重算脚本/产物哈希；写序 rawlog → artifacts → 账本，每步 WAL 先行；`recover()` 回滚 pending / 补齐 rawlog_done；`audit()` 只读重放（链式 row_hash、row_seq 连续、账本↔rawlog 双射、产物仍在） | — |
+| `tools/m1_acceptance.py` | 行为验收 31 项：A 幂等（8）· B hash 绑定与失败原子性（4）· C WAL 崩溃恢复（9）· D 双源对账（6）· E 重放确定性（4） | `M1 行为验收：全绿（31 项断言）` |
+| `run_gates.sh` | 新增 **GATE 6**；`m1/` 或验收脚本缺失时降级 WARN（规格门禁不被运行时代码绑架） | 六 gate 全绿 |
+| `README.md` | 新增「M1 最小闭环」章节 + 版本边界说明：`m1/` 不是 ledger-mcp，八步链其余步骤 / 全量 schema 校验 / rail / 快照与 DOI 仍属 M3 | — |
+
+实现过程中被自己的断言抓出的一个真 bug：`row_id` 曾参与自身派生（`stable_projection` 未排除 `row_id` 字段），
+导致「落账前的记录」与「读回的行」算不出同一个 id——审计会对正常账本报 `TAMPER_DETECTED`，幂等键也随之失效。
+修法：`VOLATILE` 加入 `row_id`（派生结果是输出，不是输入）。
+
+**未实现（M3 范围，明确不冒充）**：ClaimCard 全量 schema 校验、八步链第 2/3/6/7/8 步、六道 rail、快照/DOI 校验、
+`audit_event_id` 签发。对账码 `UNCOMMITTED_EVENT`（rawlog 有事件而账本无行）与 `ARTIFACT_MISSING` 是 M1 局部码，
+**故意不写进冻结文档**、不登记进 `freeze_codes.py`，以免文档与码表漂移。
+
+**当前全绿口径**：六 gate —— `jcs.py --selftest` 35/35 · `gen_composites.py --check` 2 件 · `validate_freeze.py` 82 断言
+（G1 42 / G2 23 / G3 7 / G4 10）· `check_cross_refs.py` 18 项 · `check_docs_consistency.py` 73 项 · `m1_acceptance.py` 31 项。

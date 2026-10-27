@@ -22,3 +22,6 @@ Thumbs.db
 
 # archify 工作目录（生成物与回执，不纳入版本库）
 .archify/
+
+# M1 参考实现的本地账本目录（含产物与 WAL）
+.m1store/
