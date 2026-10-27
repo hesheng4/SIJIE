@@ -4980,7 +4980,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <div class="pulse-dot"></div>
         <h1>研究论文生成系统 · 总体架构（八层）</h1>
       </div>
-      <p class="subtitle">阶段 1 冻结包 v26 / 交付物 v1.7.0 ｜ WorkSwarm + openjiuwen ｜ SwarmSkill 十一角色 ｜ CLAIMS 账本 append-only</p>
+      <p class="subtitle">总纲 v27 · 交付物 v1.7.0 · 阶段 1 冻结包 ｜ WorkSwarm + openjiuwen ｜ SwarmSkill 十一角色 ｜ CLAIMS 账本 append-only</p>
     </div>
 
 
@@ -4990,7 +4990,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
          data-preset-badge-editorial-plate="ARCHIFY / 图版 04">
       <svg viewBox="0 0 1100 884" role="img" lang="zh-CN" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="showcase" data-reader-fit="intrinsic-height" data-reader-min-text="7.5" data-reader-primary-text="14">
         <title id="archify-diagram-title">研究论文生成系统 · 总体架构（八层）</title>
-        <desc id="archify-diagram-description">阶段 1 冻结包 v26 / 交付物 v1.7.0 ｜ WorkSwarm + openjiuwen ｜ SwarmSkill 十一角色 ｜ CLAIMS 账本 append-only</desc>
+        <desc id="archify-diagram-description">总纲 v27 · 交付物 v1.7.0 · 阶段 1 冻结包 ｜ WorkSwarm + openjiuwen ｜ SwarmSkill 十一角色 ｜ CLAIMS 账本 append-only</desc>
         <!-- Definitions -->
         <defs>
           <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
@@ -5490,6 +5490,30 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           <li>check_cross_refs.py：18 项版本对偶；check_docs_consistency.py：73 项文档口径 C1–C9</li>
           <li>gen_docs_views.py：三视图机生成；jcs.py：RFC 8785 35 向量</li>
           <li>冻结 = bash run_gates.sh 全绿（退出码 0/1/2）</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot emerald"></div>
+          <h3>M1 参考实现（m1/）</h3>
+        </div>
+        <ul>
+          <li>落账对象 = ClaimRow 1.2.0 内嵌 ClaimCard 1.4.0；步 1 全量 schema 校验（draft-07 + 自实现 date-time）</li>
+          <li>八步链 + 六道 rail + 事件签发：run_gates GATE 6 共 76 项行为断言</li>
+          <li>WAL 双写 rawlog → artifacts → 账本；row_id 幂等；audit 双源对账可报 TAMPER_DETECTED</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot violet"></div>
+          <h3>集成落位（v27 D28）</h3>
+        </div>
+        <ul>
+          <li>ledger-mcp → 外部 MCP 服务：config.yaml 的 mcp.servers 注册，工具面 append_claim / verify_claim / query / audit</li>
+          <li>六道门 + AuditRail → DeepAgentRail 扩展：extensions/&lt;name&gt;/rail.py，BLOCK 走 ctx.extra[_skip_tool]</li>
+          <li>审计链 / blob CAS → 复用 EvidenceWriter（机制可抄，digest 必须换 RFC 8785 JCS）</li>
         </ul>
       </div>
 

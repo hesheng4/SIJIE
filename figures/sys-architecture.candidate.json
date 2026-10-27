@@ -1,0 +1,376 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "研究论文生成系统 · 总体架构（八层）",
+    "subtitle": "总纲 v27 · 交付物 v1.7.0 · 阶段 1 冻结包 ｜ WorkSwarm + openjiuwen ｜ SwarmSkill 十一角色 ｜ CLAIMS 账本 append-only",
+    "locale": "zh-CN",
+    "output": ".archify/architecture-research-os-20261026-234731/sys-architecture.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    {
+      "id": "brief",
+      "type": "external",
+      "label": "Research Brief",
+      "sublabel": "输入契约层：问题 · 数据 · 文献三档 · 期刊档案",
+      "pos": [
+        480,
+        96
+      ],
+      "size": [
+        240,
+        64
+      ]
+    },
+    {
+      "id": "pipeline",
+      "type": "backend",
+      "label": "流水线层",
+      "sublabel": "SwarmSkill 十一角色 + SwarmFlow 编排",
+      "tag": "横切：执行点②",
+      "pos": [
+        480,
+        206
+      ],
+      "size": [
+        240,
+        76
+      ]
+    },
+    {
+      "id": "gates",
+      "type": "security",
+      "label": "可信门层（六道 rail）",
+      "sublabel": "CitationGate · Provenance · InferenceScope",
+      "tag": "Compliance · Budget · HITL",
+      "pos": [
+        480,
+        318
+      ],
+      "size": [
+        240,
+        84
+      ]
+    },
+    {
+      "id": "ledger-mcp",
+      "type": "backend",
+      "label": "ledger-mcp",
+      "sublabel": "唯一写入口 · 八步校验链",
+      "pos": [
+        510,
+        438
+      ],
+      "size": [
+        180,
+        60
+      ]
+    },
+    {
+      "id": "claims",
+      "type": "database",
+      "label": "证据链层 CLAIMS.jsonl",
+      "sublabel": "append-only · 永不压缩",
+      "pos": [
+        480,
+        544
+      ],
+      "size": [
+        240,
+        68
+      ]
+    },
+    {
+      "id": "auditor",
+      "type": "security",
+      "label": "审计出口层 Auditor",
+      "sublabel": "双源对账：账本 × 原始日志 + 重放",
+      "pos": [
+        480,
+        648
+      ],
+      "size": [
+        240,
+        68
+      ]
+    },
+    {
+      "id": "report",
+      "type": "external",
+      "label": "论文 + 审计报告",
+      "sublabel": "投稿材料 / 交付物",
+      "pos": [
+        480,
+        752
+      ],
+      "size": [
+        240,
+        64
+      ]
+    },
+    {
+      "id": "capability",
+      "type": "cloud",
+      "label": "能力层",
+      "sublabel": "上下文生命周期 · 记忆引擎 · 自演进",
+      "tag": "策略定义处",
+      "pos": [
+        140,
+        320
+      ],
+      "size": [
+        200,
+        80
+      ]
+    },
+    {
+      "id": "venue",
+      "type": "external",
+      "label": "期刊档案层 Venue Profile",
+      "sublabel": "Brief 输入 ∩ 门层约束",
+      "tag": "约束源",
+      "pos": [
+        860,
+        320
+      ],
+      "size": [
+        200,
+        80
+      ]
+    },
+    {
+      "id": "rawlog",
+      "type": "database",
+      "label": "rawlog + artifacts",
+      "sublabel": "原始日志库 / 产物库",
+      "tag": "三写 + WAL 先行",
+      "pos": [
+        860,
+        544
+      ],
+      "size": [
+        200,
+        68
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "平台层 · WorkSwarm harness（调度 · MCP 六件套 · 权限 · rails）",
+      "wraps": [
+        "pipeline",
+        "gates",
+        "ledger-mcp"
+      ],
+      "pad": 26
+    }
+  ],
+  "connections": [
+    {
+      "id": "brief-to-pipeline",
+      "from": "brief",
+      "to": "pipeline",
+      "label": "研究简报",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "pipeline-to-gates",
+      "from": "pipeline",
+      "to": "gates",
+      "label": "声明卡 append 请求",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "gates-to-ledger",
+      "from": "gates",
+      "to": "ledger-mcp",
+      "label": "八步校验通过",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "ledger-to-claims",
+      "from": "ledger-mcp",
+      "to": "claims",
+      "label": "追加写",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "claims-to-auditor",
+      "from": "claims",
+      "to": "auditor",
+      "label": "账本只读",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "auditor-to-report",
+      "from": "auditor",
+      "to": "report",
+      "label": "审计报告",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "capability-to-gates",
+      "from": "capability",
+      "to": "gates",
+      "label": "策略定义 / 执行点①",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "capability-to-pipeline",
+      "from": "capability",
+      "to": "pipeline",
+      "label": "执行点② SwarmFlow",
+      "variant": "dashed",
+      "fromSide": "top",
+      "toSide": "left",
+      "via": [
+        [
+          240,
+          244
+        ]
+      ]
+    },
+    {
+      "id": "venue-to-gates",
+      "from": "venue",
+      "to": "gates",
+      "label": "门层约束源",
+      "fromSide": "left",
+      "toSide": "right"
+    },
+    {
+      "id": "claims-to-rawlog",
+      "from": "claims",
+      "to": "rawlog",
+      "label": "第二证据源",
+      "variant": "dashed",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "rawlog-to-auditor",
+      "from": "rawlog",
+      "to": "auditor",
+      "label": "原始日志 · 双源对账",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "right",
+      "via": [
+        [
+          960,
+          682
+        ]
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "输入与编排",
+      "items": [
+        "Research Brief = 问题 / 数据 / 文献三档 / 期刊档案；Intake 冻结 MANIFEST#0 后进入流水线",
+        "SwarmFlow 编排十一角色（coordinator → … → profile-curator），横切执行点②",
+        "声明卡按 schema 生成后交可信门层校验，不直连账本"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "可信门层 · 六道 rail",
+      "items": [
+        "CitationGate：引用必须落在 MANIFEST，未登记 DOI 直接拒",
+        "Provenance：数值绑定产物 output_index + pointer",
+        "InferenceScope / Compliance / Budget：推理权限边界、合规与 token 预算",
+        "HITL：人审点火（签核单 / 审批 / 中止）"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "八步校验链（append 时串联）",
+      "items": [
+        "① SCHEMA → ② EXEC_* → ③ MANIFEST_CONTEXT / TRANSPORTIVITY → ④ HASH / PLAN / TRANSITION",
+        "⑤ VALUE_LOCATOR / OUTPUT_INDEX → ⑥ DOI / CITATION / BACKBONE / SNAPSHOT → ⑦ DEVIATION → ⑧ ROW_CONFLICT",
+        "任一失败即拒绝 append 并落错误码；码表单一事实源 tools/freeze_codes.py"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "存储与写权限",
+      "items": [
+        "写入顺序 rawlog → artifacts → 账本，WAL 先行；pending 不发 execution_id",
+        "CLAIMS.jsonl 仅 ledger-mcp 可写、行级幂等（row_id）",
+        "Auditor 只读重放，账本 × 原始日志不一致即审计告警"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "阶段 1 冻结门禁（tools/）",
+      "items": [
+        "validate_freeze.py：82 断言 G1–G4（语义 / 规则 / 一致性 / 确定性）",
+        "check_cross_refs.py：18 项版本对偶；check_docs_consistency.py：73 项文档口径 C1–C9",
+        "gen_docs_views.py：三视图机生成；jcs.py：RFC 8785 35 向量",
+        "冻结 = bash run_gates.sh 全绿（退出码 0/1/2）"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "M1 参考实现（m1/）",
+      "items": [
+        "落账对象 = ClaimRow 1.2.0 内嵌 ClaimCard 1.4.0；步 1 全量 schema 校验（draft-07 + 自实现 date-time）",
+        "八步链 + 六道 rail + 事件签发：run_gates GATE 6 共 76 项行为断言",
+        "WAL 双写 rawlog → artifacts → 账本；row_id 幂等；audit 双源对账可报 TAMPER_DETECTED"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "集成落位（v27 D28）",
+      "items": [
+        "ledger-mcp → 外部 MCP 服务：config.yaml 的 mcp.servers 注册，工具面 append_claim / verify_claim / query / audit",
+        "六道门 + AuditRail → DeepAgentRail 扩展：extensions/<name>/rail.py，BLOCK 走 ctx.extra[_skip_tool]",
+        "审计链 / blob CAS → 复用 EvidenceWriter（机制可抄，digest 必须换 RFC 8785 JCS）"
+      ]
+    },
+    {
+      "dot": "orange",
+      "title": "十一角色协作（SwarmSkill）",
+      "items": [
+        "coordinator 编制排期与配额；intake-curator 冻结简报与 MANIFEST#0",
+        "librarian 建检索路径，analyst 产出分析，writing 只写有声明卡支撑的结论",
+        "reviewer-1/2/3 独立三审，ac 做整合，auditor 独立审计",
+        "角色词表单一事实源 = ClaimCard.definitions.Role（11 项，与 Contracts 同序）"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "声明卡状态机与凭证（ClaimCard 1.4.0）",
+      "items": [
+        "无 transition ⇒ status 必须 active；transition.from 恒为 active",
+        "to=rejected：by_role ∈ {auditor, gate_rail, hitl}，凭证 hitl / rail 配对",
+        "to=superseded：gate_rail|auditor + credential=rail + 必填 on_behalf_of_role",
+        "to=compression_orphan：compression_protocol + credential=compression；revival 需 hitl 凭证"
+      ]
+    },
+    {
+      "dot": "slate",
+      "title": "阶段 1 边界（不是缺陷）",
+      "items": [
+        "冻结范围 = schema / 契约 / 反例规格 / 门禁；不含 ledger-mcp 服务与 rail 运行时（M1–M3）",
+        "链层 L1–L5 仅结构化登记，M3 回填后 [REG] 转 PASS 才计数",
+        "数值断言为规格级：max n=150 反解 σ_d ≤ 1.48，TOST 结论待真实样本回填",
+        "非发行包；CI 只跑 py3.12，jsonschema 钉 4.26.0"
+      ]
+    }
+  ]
+}
