@@ -120,3 +120,25 @@ python tools/jcs.py --selftest           # RFC 8785 官方向量
 2. 自实现 `date-time` checker 返回 `None` —— `jsonschema.FormatChecker` 以**返回真值**判定通过，返回 `None` 会被当成失败，导致合法卡全部 `SCHEMA_FAIL`；修法：合法时返回 `True`。
 
 **仍未实现（M3，明确不冒充）**：步 2/3/5/6/7/8、六道 rail、快照/DOI 校验、`audit_event_id` 签发。
+
+## 11. M1 v3：八步链全实现 + 六道 rail + 事件签发
+
+用户要求「步 2/3/5/6/7/8、六道 rail、快照/DOI 校验、audit_event_id 签发」全部实施。冻结对象与版本口径仍不变（v26 / v1.7.0 / ClaimCard 1.4.0 / ClaimRow 1.2.0），新增的是运行时代码与行为断言。
+
+| 新增 / 变更 | 内容 |
+|---|---|
+| `m1/manifest.py`（新增） | MANIFEST 注册表 + 正文快照库：`Entry`（data / literature，literature 带 `role`、`snapshot_ref`、`locators` 白名单、`license`）、`SnapshotStore`（内容寻址、重算校验）、`Manifest.require_data_ref`（步 3：条目类型 + 哈希传递性）、`require_citation` / `require_framing`（步 6：DOI 归属、locator 白名单、primary 快照、backbone 档位）、`RunContext`（本轮 `manifest_version`） |
+| `m1/rails.py`（新增） | 六道 rail —— `CitationGate` / `Provenance` / `InferenceScope` / `Compliance` / `Budget` / `HITL`；`evaluate()` **恒返回六条**决策（顺序固定，门禁据此断言「没有哪道门被跳过」），`blocked()` / `codes()`；策略码独立命名，不进冻结码表 |
+| `m1/ledger.py`（重写 v3） | 八步全落地：步 2 执行登记 + **事件链**（`prev_event_hash`、HMAC 签发 `event_id`、每 1000 事件 checkpoint、`verify_event_chain()` 从 checkpoint 验到链尾）；步 3 `RunContext` 版本一致 + `data_refs` 传递性；步 4 脚本/产物重算 + figure 绑定 + PlanItem 绑定；步 5 RFC 6901 pointer / `csv:` 定位 + exact / float_rel 比较；步 6 引用一致性；步 7 deviation_note；步 8 `ROW_CONFLICT` + WAL 恢复；`audit_event_id` 改为 **HMAC 签发**（密钥落盘 `audit_key`，同密钥下确定 ⇒ 幂等，防伪造）；`append(context=...)` 在步 1 前做 rail 预检 |
+| `tools/m1_acceptance.py`（重写 v3） | **76 项断言**：A 幂等（8）· B 步 1 schema（8）· C 步 2 执行溯源与事件链（8）· D 步 3 上下文（7）· E 步 4 hash 绑定（7）· F 步 5 数值定位（8）· G 步 6 引用一致性（11）· H 步 7（3）· I 步 8 落账/签发/恢复（9）· J 六道 rail 集成（7） |
+| `m1/__init__.py` | 导出扩展为包级 API（Manifest / RunContext / rails 常量与函数 / 全部冻结错误类） |
+
+实现过程中被断言抓出的三个真 bug：
+
+1. **步 3 调用被注释掉**：一次错误的行内编辑把 `self._step3_context(...)` 并到了上一行的注释之后，整步静默失效（步 1/2/4 仍绿，D 组 4 项失败才暴露）。教训：多步顺序校验要有「每步一个负例」，否则删掉一步没人知道。
+2. **步 2 误伤引用类卡**：`_step2_execution` 对 `context` / `framing` 卡也要求执行编号（schema 只对 result/method 强制 `evidence`），导致引用类卡全部 `EXEC_UNRESOLVED`；修法：步 2 只对 `result` / `method` 生效。
+3. **rail 预检未接线**：`_pre_rails()` 写完但 `append()` 未调用，J7「rail 拦截时拒绝」恒为 NO-RAISE；修法：在步 1 前调用。
+
+**当前全绿口径**：六 gate —— `jcs.py --selftest` 35/35 · `gen_composites.py --check` 2 件 · `validate_freeze.py` 82 断言（G1 42 / G2 23 / G3 7 / G4 10）· `check_cross_refs.py` 18 项 · `check_docs_consistency.py` 73 项 · `m1_acceptance.py` **76 项**。
+
+**仍未实现（M3 之后的 ledger-mcp 生产件）**：多写并发仲裁、远端对象存储、MCP 服务面、rail 策略热更新、`reject_log` 落盘；`UNCOMMITTED_EVENT` / `ARTIFACT_MISSING` 与 rail 策略码仍是 M1 局部码，故意不写进冻结文档。

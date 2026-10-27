@@ -33,10 +33,12 @@
 │   ├── check_docs_consistency.py         # 文档口径机检（计数/枚举/版本/错误码/视图）
 │   ├── gen_docs_views.py                 # 交付物内嵌 JSON 视图生成/校验（--check / --write）
 │   ├── freeze_codes.py                   # 错误码单一码表
-│   └── m1_acceptance.py                  # M1 最小闭环行为验收（40 项断言，GATE 6）
+│   └── m1_acceptance.py                  # M1 行为验收（76 项断言，GATE 6）
 ├── m1/
 │   ├── __init__.py                       # M1 包导出
-│   └── ledger.py                          # M1 参考实现：步1 schema / hash 绑定 / 幂等 / WAL / 双源对账
+│   ├── manifest.py                       # MANIFEST 注册表 + 正文快照库（步 3 / 步 6 的权威源）
+│   ├── rails.py                           # 六道 rail：CitationGate/Provenance/InferenceScope/Compliance/Budget/HITL
+│   └── ledger.py                          # 账本 + 事件链 + 八步链 + 签发 + WAL 恢复 + 双源对账
 ├── run_gates.sh                          # 门禁统一入口（bash；git-bash / WSL / Ubuntu）
 ├── .github/workflows/gates.yml           # CI：ubuntu + windows × Python 3.12
 ├── pyproject.toml                        # 依赖元数据（jsonschema==4.26.0；非发行包）
@@ -80,7 +82,7 @@
 | 3 | `python tools/validate_freeze.py` | 四层判据 G1–G4（82 断言） |
 | 4 | `python tools/check_cross_refs.py` | 版本对偶绑定（文档 ↔ 文档 ↔ schemas/） |
 | 5 | `python tools/check_docs_consistency.py` | 文档口径一致性（计数/枚举/旧版本残留/错误码/内嵌视图，依赖 `gen_docs_views.py --check`） |
-| 6 | `python tools/m1_acceptance.py` | M1 最小闭环行为验收（步1 schema / 幂等 / hash 绑定 / WAL 崩溃恢复 / 双源对账 / 重放确定性） |
+| 6 | `python tools/m1_acceptance.py` | M1 行为验收（八步链正反例 / 事件链与签发 / 六道 rail 集成 / WAL 恢复 / 双源对账） |
 
 统一入口：
 
@@ -96,33 +98,48 @@ echo "exit=$?"
 
 > 门禁输出为 UTF-8 中文。`run_gates.sh` 会 `export PYTHONIOENCODING=utf-8`（Windows cp936 控制台必需），并设 `PYTHONDONTWRITEBYTECODE=1` 避免往仓库落 `__pycache__`。手工单跑门禁时请自行设置 `PYTHONIOENCODING=utf-8`。
 
-## M1 最小闭环（`m1/`，可运行参考实现）
+## M1 行为实现（`m1/`，可运行参考实现）
 
-规格说「每项声明都要能追溯到数据、执行与产物」。`m1/ledger.py` 落账的对象就是**真实的 `ClaimRow 1.2.0`**（内嵌 `ClaimCard 1.4.0`），不是自造的简化结构，因此它同时是八步链**步 1（schema）**与**步 4 的 hash 绑定子集**的可运行参考实现，供 M3 的 ledger-mcp 直接演化：
+规格说「每项声明都要能追溯到数据、执行与产物」，而「能追溯到」只有做出来才成立。`m1/` 把交付物 §1.3 的**八步校验链**与总体方案 §2 可信门层的**六道 rail**做成可运行实现；落账对象是真实的 `ClaimRow 1.2.0`（内嵌 `ClaimCard 1.4.0`），供 M3 的 ledger-mcp 直接演化（`m1/manifest.py` 是步 3/6 的权威源，`m1/rails.py` 是六道门，`m1/ledger.py` 是账本与八步链）。
 
-| 承诺 | 实现 | 行为证据（GATE 6） |
+| 步 / 门 | 实现 | 行为证据（GATE 6） |
 |---|---|---|
-| **步 1 · schema** | 落账前用 `schemas/claimcard-1.4.0.json` + `schemas/claimrow-1.2.0.json` 全量校验（含 7 条 `allOf` 规则、11 角色词表、`date-time` 自实现断言），并按冻结字段视图校验行（`prev_row_hash` / `row_hash` 作为 M1 扩展字段不进 schema） | result 缺 `values`、framing 带 `evidence`、首行 `superseded`、未登记角色、非法 `audit_event_id`、版本不符 → `SCHEMA_FAIL`，且失败不落账 |
-| **hash 绑定** | 落账前重算 `evidence.script_hash`（脚本库）与 `evidence.output_hashes[]`（产物库），任一不符即拒 | 脚本被改 → `HASH_MISMATCH`；产物/脚本未入库 → `ARTIFACT_UNREACHABLE`；失败不落任何痕迹 |
-| **行级幂等** | `row_id = "row_" + JCS(stable_projection).digest16`，投影剔除 `row_id` / `row_seq` / `appended_at` / `audit_event_id` / `prev_row_hash` / `row_hash` | 同内容重复 append 只落一行、只记一条 rawlog 事件；内容变则 id 变 |
-| **WAL 双写** | 写序 rawlog → 账本，每步前落 `wal/<row_id>.json` | `rawlog` 后崩溃 → 重启回滚；`rawlog_done` 后崩溃 → 重启补齐；两种情况对账都回到全绿 |
-| **双源对账** | `audit()` 只读重放：链式 `row_hash`、`row_seq` 连续、`row_id` 可重派生、账本 ↔ rawlog 双射、产物仍在 | 改账本（含内嵌 ClaimCard）→ `TAMPER_DETECTED`；删 rawlog → `PHANTOM_EVENT`；多出事件 → `UNCOMMITTED_EVENT`；产物被删 → `ARTIFACT_MISSING` |
+| **步 1 · schema** | `schemas/claimcard-1.4.0.json` + `claimrow-1.2.0.json` 全量校验（含 7 条 `allOf`、11 角色词表、`date-time` 自实现），行按冻结字段视图校验（`prev_row_hash` / `row_hash` 为 M1 扩展字段，不进 schema） | result 缺 `values`、framing 带 `evidence`、首行 `superseded`、未登记角色、非法 `audit_event_id`、版本不符 → `SCHEMA_FAIL`，失败不落账 |
+| **步 2 · 执行溯源** | `record_execution()` 把执行写进 rawlog **事件链**（每步带 `prev_event_hash`、`event_id` 由 HMAC 签发，每 1000 事件写 checkpoint）；落账前验链并核对执行状态 | 未登记 → `EXEC_UNRESOLVED`；`failed` / 审计不可用 → `EXEC_REJECTED`；事件被改写或冒签 → `EXEC_CHAIN_FAIL` |
+| **步 3 · MANIFEST 上下文** | 行 `manifest_version` 必须等于本轮 `RunContext`；`data_refs[]` 必属数据条目且条目哈希等于 `data_hash` | 哈希漂移 → `TRANSPORTIVITY_FAIL`；指向文献条目 / 版本不符 / 不挂 MANIFEST → `MANIFEST_CONTEXT_MISMATCH` |
+| **步 4 · hash 绑定** | 重算脚本库与产物库；`figure_hashes ⊆ output_hashes`；`plan_ref` 解析到 PlanItem 且 `expected_script_hash` 相符 | 脚本/产物被改 → `HASH_MISMATCH`、`ARTIFACT_UNREACHABLE`；figure 未绑 → `FIGURE_HASH_UNBOUND`；plan 未登记/错配 → `PLAN_UNBOUND` / `PLAN_MISMATCH`（exploratory 带偏差注记可降级） |
+| **步 5 · 数值定位** | 产物按 RFC 6901 pointer 或 `csv:<列>[:行]` 取值，`exact` 按转型全等、`float_rel` 按容差比较 | 越界 → `OUTPUT_INDEX_OUT_OF_RANGE`；定位失败或值与声明不符 → `VALUE_LOCATOR_FAIL` |
+| **步 6 · 引用一致性** | `m1/manifest.py`：DOI 必属本轮文献条目、`locator` 在可解析白名单、`primary` 必带快照且快照在库、`survey_transfer` 的 survey 与 `framing` 必为 `backbone` | `DOI_NOT_IN_MANIFEST` / `CITATION_LOCATOR_FAIL` / `SNAPSHOT_MISSING` / `BACKBONE_GRADE_VIOLATION` |
+| **步 7 · 偏差标注** | `exploratory` 卡必须带 `lineage.deviation_note` | 缺失 → `DEVIATION_UNNOTED` |
+| **步 8 · 落账** | `row_id` 幂等短路；`row_seq` 被占且内容不同即冲突；`audit_event_id` 由 HMAC 签发（密钥落盘 `audit_key`，同密钥下确定 ⇒ 重放幂等） | 序号冲突 → `ROW_CONFLICT`；伪造 `audit_event_id` → 对账报 `TAMPER_DETECTED` |
+| **六道 rail** | `m1/rails.py`：CitationGate / Provenance / InferenceScope / Compliance / Budget / HITL，`evaluate()` 恒返回六条决策，`ledger.append(context=...)` 在步 1 前预检 | 超预算、声明越界、许可禁用、framing 无审批人 → BLOCK 拒绝且不落账；六条全 ALLOW → 正常落账 |
 
 ```python
-from m1.ledger import Ledger, derive_row_id
+from m1 import Entry, Ledger, Manifest, RunContext
+from m1.rails import RailContext
 
-led = Ledger(".m1store")                       # claims/ + rawlog/ + artifacts/ + scripts/ + wal/
-led.store_script(b"print(0.42)
-")             # 内容寻址入库，返回 sha256:…
-led.store_artifact(b"result: 0.42
-")
-led.append(claim_card)                         # 幂等：同内容第二次调用不会新增行
-led.append(claim_card)                         # → AppendResult(duplicate=True)
-led.recover()                                  # 崩溃后调用：回滚 pending、补齐 rawlog_done
-led.audit().ok                                 # True = 账本与原始日志一致
+led = Ledger(".m1store")          # claims/ rawlog/ artifacts/ scripts/ snapshots/ wal/ audit_key
+script = led.store_script(b"print('mean=0.42')\n")     # 内容寻址入库，返回 sha256:…
+artifact = led.store_artifact(b'{"mean": 0.42}')       # 步 5 的定位对象
+snapshot = led.store_snapshot("原文快照：表 2，p.12")     # 步 6 的一手正文
+led.register_plan("pln_0f1e2d3c4b5a", script)          # 步 4 的 PlanItem
+led.record_execution("exec_a1b2c3d4e5f60718")          # 步 2：执行登记进事件链
+
+manifest = Manifest("MANIFEST#7", entries=[
+    Entry("mfe_0f1e2d3c4b5a", "data", sha256=artifact),
+    Entry("mfe_1a2b3c4d5e6f", "literature", doi="10.1234/abc", role="backbone",
+          snapshot_ref=snapshot, locators=("p.12",), license="cc-by"),
+])
+run_context = RunContext("run_01", "MANIFEST#7", "runctx_01", manifest)
+rails = RailContext(allowed_claim_types=("result", "method"), human_approver="hitl-01")
+
+led.append(card, manifest=manifest, run_context=run_context, context=rails)
+led.append(card, manifest=manifest, run_context=run_context)   # 幂等：duplicate=True
+led.recover()                     # 崩溃后调用：回滚 pending、补齐 rawlog_done
+led.audit().ok                    # True = 账本与原始日志（含事件链）一致
 ```
 
-**边界（不要过度解读）**：`m1/` 是**最小闭环**，不是 ledger-mcp。已实现步 1（schema）与步 4 的 hash 绑定子集；步 2/3/5/6/7/8、六道 rail、快照与 DOI 校验、`audit_event_id` 签发仍属 M3。`prev_row_hash` / `row_hash` 是 M1 的链式扩展字段，**不写进冻结 schema**（避免改冻结版本）；对账码 `UNCOMMITTED_EVENT` / `ARTIFACT_MISSING` 是 M1 局部码，未登记进 `tools/freeze_codes.py`，因此不写进冻结文档（避免文档与码表漂移）。
+**边界（不要过度解读）**：`m1/` 是可运行参考实现，**不是 ledger-mcp**。已实现八步链的判定逻辑、事件链与签发、六道 rail；未实现的是生产件——多写并发仲裁、远端对象存储、MCP 服务面、rail 策略热更新、`reject_log` 落盘。`prev_row_hash` / `row_hash` 是 M1 的链式扩展字段，**不写进冻结 schema**（避免改冻结版本）；对账码 `UNCOMMITTED_EVENT` / `ARTIFACT_MISSING` 与 rail 策略码是 M1 局部码，未登记进 `tools/freeze_codes.py`，因此不写进冻结文档（避免文档与码表漂移）。
 
 
 ## 本地运行
@@ -149,7 +166,7 @@ python tools/check_docs_consistency.py
 python tools/m1_acceptance.py
 ```
 
-预期终态输出摘要：`jcs 35/35 passed`、复合件 2 件一致、`冻结门禁：全绿（82 项断言；G1: 42 / G2: 23 / G3: 7 / G4: 10；链层用例契约 5 项待 M3）`、版本对偶校验全绿、文档一致性全绿（含 3 处内嵌视图 `gen_docs_views.py --check`）、`M1 行为验收：全绿（40 项断言；A 幂等 / B hash / C WAL / D 对账 / E 重放 / F 步1 schema）`。当前若仍有门禁为红，以 `run_gates.sh` 汇总为准。
+预期终态输出摘要：`jcs 35/35 passed`、复合件 2 件一致、`冻结门禁：全绿（82 项断言；G1: 42 / G2: 23 / G3: 7 / G4: 10；链层用例契约 5 项待 M3）`、版本对偶校验全绿、文档一致性全绿（含 3 处内嵌视图 `gen_docs_views.py --check`）、`M1 行为验收：全绿（76 项断言；A 幂等 / B 步1 / C 步2 / D 步3 / E 步4 / F 步5 / G 步6 / H 步7 / I 步8 / J rail）`。当前若仍有门禁为红，以 `run_gates.sh` 汇总为准。
 
 仅在基础 schema 变更后需要重新生成复合件（会覆写 `schemas/`，正常提交前必须跑 `--check` 确认）：
 
@@ -170,7 +187,7 @@ python tools/gen_docs_views.py --write   # 同步交付物内嵌视图
 ## 状态与边界
 
 - **阶段 1 = 规格冻结**：本包交付「冻结对象 + 冻结判据」，**无运行时实现**——ledger-mcp、六道 rail（ClaimCardRail / AuditRail / CitationGate / …）、沙箱执行、编排流水线均未实现。
-  - 例外且已标注边界：`m1/` 是**最小闭环参考实现**（步1 schema / hash 绑定 / 行级幂等 / WAL 双写 / 双源对账五条承诺，40 项行为断言），用于把规格变成可测行为；它不是 ledger-mcp，八步链其余步骤（步2/3/5/6/7/8）、rail 与快照/DOI 校验仍在 M3。
+  - 例外且已标注边界：`m1/` 是**可运行参考实现**（八步链判定 + 事件链与签发 + 六道 rail，76 项行为断言），用于把规格变成可测行为；它不是 ledger-mcp，未实现的部分是生产件（多写并发仲裁、远端存储、MCP 服务面、策略热更新、`reject_log`），行为验收范围见上一节表格。
 - **登记未实现项**：链层契约 L1–L5（八步链专有错误码 8 项）以 `REG` 登记，门禁校验登记完整性；行为待 ledger-mcp 落地后由 **M3** 验收，不计入 82 项断言。
 - **视图即生成物**：交付物 §1.2 / §1.6 / §1.7 的 JSON 视图块由 `tools/gen_docs_views.py` 机生成，`--check` 已入门禁，禁止手改。
 - **非发行包**：`pyproject.toml` 只用于锁定依赖与 Python 版本（`packages = []`），不产出可安装包、不发布。
