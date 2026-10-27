@@ -144,7 +144,7 @@ python tools/gen_docs_views.py --write   # 同步交付物内嵌视图
 
 - **CI 依赖策略**：`jsonschema` 在 `pyproject.toml` 与 `gates.yml` 两处均钉死 `==4.26.0`（门禁实测版本）。升级依赖需同轮改两处并重跑全部门禁；如需放宽到区间版本，应先确认 4.26.0 之外的 draft-07 `oneOf`/`format` 行为无回归。
 - **Python 版本矩阵**：CI 仅验证 3.12；`requires-python >= 3.11` 的下界未进 CI。需要覆盖 3.11/3.13 时扩 matrix。
-- **尚未入库的清理**：历史上已被 Git 跟踪的 `tools/__pycache__/*.pyc` 与 `.dsh-ops/` 文件即使已进 `.gitignore` 仍需维护者执行一次 `git rm --cached` 才会停止跟踪（本包不做任何 Git 索引/提交操作）。
+- **索引清理已完成**：`tools/__pycache__/` 与 `.dsh-ops/` 的历史跟踪项已在优化提交中一次清掉（`git rm -r --cached` + 删除 `__pycache__`），当前 `git ls-files` 不含这两类路径；`.gitignore` 继续阻止其再次入库（含 `.archify/` 生成目录）。
 - **阶段 2+ 待补**：TOST 校准回填、σ_d 可行域、外部锚（66–69% 与构念重建）等口径见两份 md 的待办与 D26/D27 登记。
 
 ## 参考

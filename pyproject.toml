@@ -34,4 +34,6 @@ dev = [
 packages = []
 
 [tool.pytest.ini_options]
+# 阶段 1 是规格冻结包：断言内嵌在 tools/ 门禁脚本里（run_gates.sh 单入口），
+# 没有独立 pytest 用例，故 testpaths 留空。运行时实现（M1–M3）落地后在此登记测试目录。
 testpaths = []
