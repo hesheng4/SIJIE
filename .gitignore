@@ -25,3 +25,6 @@ Thumbs.db
 
 # M1 参考实现的本地账本目录（含产物与 WAL）
 .m1store/
+
+# 上游源码参考（只读，不纳入版本库）
+jiuwenswarm-develop/
