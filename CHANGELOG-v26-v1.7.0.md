@@ -142,3 +142,22 @@ python tools/jcs.py --selftest           # RFC 8785 官方向量
 **当前全绿口径**：六 gate —— `jcs.py --selftest` 35/35 · `gen_composites.py --check` 2 件 · `validate_freeze.py` 82 断言（G1 42 / G2 23 / G3 7 / G4 10）· `check_cross_refs.py` 18 项 · `check_docs_consistency.py` 73 项 · `m1_acceptance.py` **76 项**。
 
 **仍未实现（M3 之后的 ledger-mcp 生产件）**：多写并发仲裁、远端对象存储、MCP 服务面、rail 策略热更新、`reject_log` 落盘；`UNCOMMITTED_EVENT` / `ARTIFACT_MISSING` 与 rail 策略码仍是 M1 局部码，故意不写进冻结文档。
+
+## 12. 端到端演示（真实数据跑通八步链）
+
+| 文件 | 变更 |
+|---|---|
+| `demo/run_e2e.py` | 新增：八步链端到端编排 + 每步负例 + 审计/恢复演示（48 项检查） |
+| `demo/scripts/git_commit_stats.py` | 新增：被落账的统计脚本（只解析传入 TSV，可离线重放） |
+| `demo/data/rfc8785.txt` / `data/git-log.tsv` | 新增：真实取回的 RFC 8785 正文、真实 git 历史导出 |
+| `demo/data/RETRIEVAL.json` | 新增：取回取证记录（URL / DOI / 时间 / HTTP 状态 / 字节哈希） |
+| `demo/README.md` | 新增：八步正例、20 条负例、审计恢复的对照表 |
+| `run_gates.sh` | 追加 **GATE 7**（`demo/run_e2e.py`），缺失时 WARN |
+| `.gitignore` | 追加 `demo/.store/`、`demo/out/`（账本与派生产物可重建） |
+| `README.md` | 新增「端到端演示（`demo/`）」小节 |
+
+实测（2026-10-27）：`bash run_gates.sh` 七 gate 全绿 —— jcs 35 向量 / gen_composites 2 件 / validate_freeze 82 断言 / check_cross_refs 18 项 / check_docs_consistency 73 项 / m1_acceptance 76 项 / **run_e2e 48 项**。
+
+演示中的真实数字：RFC 8785 正文 41,879 bytes（`sha256:63d52294…`）、数据 `sha256:441ab4c2…`、脚本 `sha256:d36b43a4…`、产物 `sha256:c9b51b95…`、执行 `exec_203fee8ec6748021`、两行账本 `row_57cebcd0b5d8c9a1` / `row_7a6615ddab633802`。
+
+边界：`demo/` 用的是 M1 单机账本（JSONL + WAL），不是 ledger-mcp；「检索」把一次真实 HTTP 取回与其取证记录固定下来以保证离线可重放，换数据只需替换 `demo/data/` 与 `RETRIEVAL.json`。

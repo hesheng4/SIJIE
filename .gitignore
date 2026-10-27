@@ -28,3 +28,7 @@ Thumbs.db
 
 # 上游源码参考（只读，不纳入版本库）
 jiuwenswarm-develop/
+
+# 端到端演示的本地账本与派生产物（数据与脚本入库，账本与产物可重建）
+demo/.store/
+demo/out/

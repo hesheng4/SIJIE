@@ -142,6 +142,21 @@ led.audit().ok                    # True = 账本与原始日志（含事件链�
 **边界（不要过度解读）**：`m1/` 是可运行参考实现，**不是 ledger-mcp**。已实现八步链的判定逻辑、事件链与签发、六道 rail；未实现的是生产件——多写并发仲裁、远端对象存储、MCP 服务面、rail 策略热更新、`reject_log` 落盘。`prev_row_hash` / `row_hash` 是 M1 的链式扩展字段，**不写进冻结 schema**（避免改冻结版本）；对账码 `UNCOMMITTED_EVENT` / `ARTIFACT_MISSING` 与 rail 策略码是 M1 局部码，未登记进 `tools/freeze_codes.py`，因此不写进冻结文档（避免文档与码表漂移）。
 
 
+## 端到端演示（`demo/`）
+
+规格能写成文档，『能拒绝』得跑起来才算数。`demo/` 用**真实数据**把八步链走一遍：
+
+- 数据：`GET https://www.rfc-editor.org/rfc/rfc8785.txt` 真实取回的 RFC 8785 正文（41,879 bytes，取证记录在 `demo/data/RETRIEVAL.json`）+ 本仓库真实 `git log --numstat` 导出（11 次提交）；
+- 链路：检索 → 脚本真实执行 → 产物内容寻址 → RFC 6901 取值比对 → primary 引用 + 一手快照 → 八步校验后落账 → 双源对账；
+- 负例：对每一步构造「只改一处」的卡片，断言被对应冻结码拒绝（`SCHEMA_FAIL` / `TRANSPORTIVITY_FAIL` / `PLAN_MISMATCH` / `VALUE_LOCATOR_FAIL` / `CITATION_LOCATOR_FAIL` / `SNAPSHOT_MISSING` / `TAMPER_DETECTED` … 共 20 条）；
+- 实测：**48 项检查全绿**，账本 3 行，`audit()` 无 findings；`bash run_gates.sh` 的 **GATE 7** 即此演示。
+
+```bash
+python demo/run_e2e.py        # 从零重建账本并跑完整链路（数据与脚本入库，账本/产物可重建）
+```
+
+细节见 [`demo/README.md`](demo/README.md)。
+
 ## 本地运行
 
 前置条件：

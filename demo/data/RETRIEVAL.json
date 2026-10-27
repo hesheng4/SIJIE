@@ -1,0 +1,11 @@
+{
+  "url": "https://www.rfc-editor.org/rfc/rfc8785.txt",
+  "title": "RFC 8785: JSON Canonicalization Scheme (JCS)",
+  "doi": "10.17487/RFC8785",
+  "retrieved_at": "2026-10-27T13:59:09Z",
+  "http_status": 200,
+  "bytes": 41879,
+  "sha256": "sha256:63d52294eb0e3f0014174288186d388b4ddbf2c67d1ce8af1d9726eb0c3ab240",
+  "retriever": "curl/8.x (HTTP GET, no auth)",
+  "purpose": "步 6 引用一致性的一手正文快照（primary）"
+}

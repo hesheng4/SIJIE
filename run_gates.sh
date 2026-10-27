@@ -113,6 +113,17 @@ else
   echo
 fi
 
+# 端到端演示：真实数据跑通八步（检索→脚本→数值→引用→落账→审计）；缺失时 WARN
+if [ -f demo/run_e2e.py ]; then
+  run_gate 7 "run_e2e（真实数据八步端到端演示）" "$PY" demo/run_e2e.py
+else
+  echo "---- [GATE 7] run_e2e（真实数据八步端到端演示）----"
+  echo "\$ python demo/run_e2e.py"
+  echo "[GATE 7] run_e2e ............... WARN（demo/ 缺失，跳过；不计失败）"
+  RESULTS+=("[GATE 7] run_e2e = WARN（缺失，跳过）")
+  echo
+fi
+
 # ---------- 汇总 ----------
 echo "========================= 汇总 ========================="
 for r in "${RESULTS[@]}"; do
