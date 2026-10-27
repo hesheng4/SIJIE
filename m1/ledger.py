@@ -1,36 +1,43 @@
-"""M1 最小闭环：声明落账的参考实现（hash 绑定 + WAL 先行 + 行级幂等 + 双源对账）。
+"""M1 最小闭环 v2：声明落账的参考实现（步 1 schema + 步 4 hash + 幂等 + WAL + 双源对账）。
 
 定位
 ----
-阶段 1 冻结包只冻结「schema + 契约 + 反例规格」，本模块是 **M1 的最小可运行参考实现**，
-用于把规格里的四件事变成可测行为：
+阶段 1 冻结包冻结「schema + 契约 + 反例规格」；本模块是 **M1 的最小可运行参考实现**，
+用真实 schema 把规格变成可测行为。落账对象就是 **ClaimRow 1.2.0**（内嵌 ClaimCard 1.4.0），
+不再自造简化结构。
 
-1. **hash 绑定**：声明卡必须携带脚本哈希与产物哈希，落账前逐一重算比对，
-   不一致 → `HASH_MISMATCH`；产物缺失 → `ARTIFACT_UNREACHABLE`。
-2. **行级幂等**：`row_id = "row_" + JCS(stable_projection).digest16`，
-   同一内容重复 append 只落一行、只记一条 rawlog 事件（RFC 8785 canonical 保证跨平台一致）。
-3. **双写 + WAL 先行**：写序固定 rawlog → artifacts → 账本；每步前落 WAL，
-   进程在任意一步中断后 `recover()` 能把事务补齐或回滚到一致状态。
-4. **双源对账**：`audit()` 只读重放，检查链式哈希、序号连续、账本 ↔ rawlog 一一对应、
-   产物仍在且哈希未变；不一致分别报 `TAMPER_DETECTED` / `PHANTOM_EVENT` / `UNCOMMITTED_EVENT` /
-   `ARTIFACT_MISSING`。
+已实现（对齐交付物 §1.3 八步链的两个节点）
+-------------------------------------------
+1. **步 1 · schema**：ClaimCard 1.4.0 与 ClaimRow 1.2.0 全量校验（含 7 条 allOf 规则、11 角色词表、
+   `date-time` 自实现格式断言），失败 → `SCHEMA_FAIL`。
+2. **步 4 · hash 绑定（子集）**：`card.evidence.script_hash` 必须命中脚本库且内容一致；
+   `card.evidence.output_hashes[]` 必须命中产物库且内容一致 → 否则 `HASH_MISMATCH` / `ARTIFACT_UNREACHABLE`。
+3. **行级幂等**：`row_id = "row_" + JCS(stable_projection).digest16`，
+   稳定投影 = 去掉 `row_id / row_seq / appended_at / audit_event_id / row_hash` 后的行。
+4. **双写 + WAL 先行**：写序 rawlog → artifacts → 账本；每步前落 `wal/<row_id>.json`，
+   `recover()` 回滚 pending、补齐 rawlog_done。
+5. **双源对账**：`audit()` 校验链式 `row_hash`、`row_seq` 连续、`row_id` 可重新派生、
+   账本 ↔ rawlog 双射、产物仍在。
 
-**不是 ledger-mcp**：八步校验链只实现了第 1/4/5 步的 hash 子集，ClaimCard 全量 schema 校验、
-六道 rail、快照与 DOI 校验、`audit_event_id` 签发均属 M3；本模块的 `UNCOMMITTED_EVENT`
-是 M1 局部码，未登记进 `tools/freeze_codes.py`（M3 前不写入冻结文档）。
+未实现（M3）
+------------
+步 2（执行溯源/EXEC_*）、步 3（MANIFEST 上下文/传递性）、步 5（数值 locator）、步 6（DOI/CITATION/
+BACKBONE/SNAPSHOT）、步 7（偏差）、步 8（ROW_CONFLICT 的多写并发仲裁）、六道 rail 运行时、`audit_event_id` 签发。
+本模块的 `UNCOMMITTED_EVENT` / `ARTIFACT_MISSING` 是 M1 局部对账码，未登记进 `freeze_codes.py`，
+故不写入冻结文档（避免文档与码表漂移）。
 
-目录布局（root 可放在任意路径，测试用临时目录）
--------------------------------------------------
-    root/claims/CLAIMS.jsonl         # 只追加账本（唯一写入口的替身）
-    root/rawlog/rawlog-0000.jsonl    # 执行事件（原始日志，第二证据源）
-    root/artifacts/<sha256 前 2 位>/<12 位>  # 产物内容寻址存储
-    root/wal/<row_id>.json           # 事务 WAL（committed 后删除）
-
-退出码约定与其它门禁一致：正常返回 0，断言失败由调用方（tools/m1_acceptance.py）汇总。
+目录布局（root 任意，测试用临时目录）
+-------------------------------------
+    root/claims/CLAIMS.jsonl          # 只追加账本（ClaimRow 1.2.0）
+    root/rawlog/rawlog-0000.jsonl     # 执行事件（第二证据源）
+    root/artifacts/<sha256:2>/<:14>   # 产物内容寻址存储
+    root/scripts/<sha256:2>/<:14>     # 脚本内容寻址存储
+    root/wal/<row_id>.json            # 事务 WAL（committed 后删除）
 """
 
 from __future__ import annotations
 
+import datetime as _dt
 import hashlib
 import json
 import os
@@ -40,35 +47,48 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "tools"))
 import jcs  # noqa: E402  RFC 8785 canonical / digest16（单一事实源）
+
+try:  # jsonschema 是硬依赖（与冻结门禁一致）
+    import jsonschema
+    from jsonschema import Draft7Validator, FormatChecker
+except Exception as exc:  # pragma: no cover
+    raise SystemExit(f"m1.ledger: 缺少依赖 jsonschema（{exc}）") from exc
 
 __all__ = [
     "Ledger",
     "AppendResult",
     "AuditReport",
     "LedgerError",
+    "SchemaFail",
     "HashMismatch",
     "ArtifactUnreachable",
     "SimulatedCrash",
     "derive_row_id",
     "stable_projection",
+    "chain_digest",
     "sha256_bytes",
     "sha256_file",
-    "chain_digest",
+    "CLAIMCARD_VERSION",
+    "CLAIMROW_VERSION",
 ]
 
-#: 不参与 row_id 派生的易变字段（重放/重算时必须投影掉）。
-#: `row_id` 自身是派生结果而非输入，必须排除，否则「读回的行」与「落账前的记录」算不出同一个 id。
-VOLATILE = ("row_id", "appended_at", "audit_event_id", "row_seq", "prev_row_hash", "row_hash")
+CLAIMCARD_VERSION = "1.4.0"
+CLAIMROW_VERSION = "1.2.0"
+SCHEMAS_DIR = ROOT / "schemas"
+
+#: 不参与 row_id 派生的易变字段。`row_id` 自身是派生结果而非输入，必须排除，
+#: 否则「落账前的行」与「读回的行」算不出同一个 id。
+VOLATILE = ("row_id", "row_seq", "appended_at", "audit_event_id",
+            "prev_row_hash", "row_hash")
 
 
 # --------------------------------------------------------------------------- #
 # 错误码
 # --------------------------------------------------------------------------- #
 class LedgerError(Exception):
-    """落账失败，`code` 为八步链已登记的错误码或 M1 局部码。"""
-
     code = "LEDGER_ERROR"
 
     def __init__(self, message: str = "", *, code: str | None = None) -> None:
@@ -76,8 +96,12 @@ class LedgerError(Exception):
         if code:
             self.code = code
 
-    def __str__(self) -> str:  # pragma: no cover - 仅用于展示
+    def __str__(self) -> str:
         return f"{self.code}: {super().__str__()}"
+
+
+class SchemaFail(LedgerError):
+    code = "SCHEMA_FAIL"
 
 
 class HashMismatch(LedgerError):
@@ -89,13 +113,11 @@ class ArtifactUnreachable(LedgerError):
 
 
 class SimulatedCrash(LedgerError):
-    """测试用：在指定阶段中断事务，验证 WAL 恢复。"""
-
     code = "SIMULATED_CRASH"
 
 
 # --------------------------------------------------------------------------- #
-# 哈希与投影
+# 哈希 / 投影 / 时间
 # --------------------------------------------------------------------------- #
 def sha256_bytes(data: bytes) -> str:
     return "sha256:" + hashlib.sha256(data).hexdigest()
@@ -109,20 +131,88 @@ def sha256_file(path: str | os.PathLike[str]) -> str:
     return "sha256:" + h.hexdigest()
 
 
-def stable_projection(record: dict[str, Any]) -> dict[str, Any]:
+def stable_projection(row: dict[str, Any]) -> dict[str, Any]:
     """去掉易变字段后的稳定投影：同内容的两次落账得到同一个 row_id。"""
-    return {k: v for k, v in record.items() if k not in VOLATILE}
+    return {k: v for k, v in row.items() if k not in VOLATILE}
 
 
-def derive_row_id(record: dict[str, Any]) -> str:
-    """`row_id = "row_" + digest16(JCS(stable_projection))`，与冻结规格 §1.8 同口径。"""
-    return "row_" + jcs.digest16(stable_projection(record))
+def derive_row_id(row: dict[str, Any]) -> str:
+    """`row_id = "row_" + digest16(JCS(stable_projection))`（冻结规格 §1.8 同口径）。"""
+    return "row_" + jcs.digest16(stable_projection(row))
 
 
 def chain_digest(row: dict[str, Any]) -> str:
     """行级链哈希：覆盖行内全部字段（含 row_seq / prev_row_hash），但不含 row_hash 自身。"""
     body = {k: v for k, v in row.items() if k != "row_hash"}
     return "sha256:" + hashlib.sha256(jcs.canonical(body).encode("utf-8")).hexdigest()
+
+
+def _iso(ts: float) -> str:
+    return _dt.datetime.fromtimestamp(ts, tz=_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _audit_event_id(row_id: str) -> str:
+    """确定性事件 id（幂等重放得到同一个）；M3 改为 ledger-mcp 签发。"""
+    return "evt_" + jcs.digest16({"row_id": row_id, "kind": "claim.append"})
+
+
+def _self_check_datetime(value: str) -> bool:
+    """本机常缺 rfc3339-validator，`date-time` 断言会静默失效，故自实现并强制注入。
+
+    注意：jsonschema 的 FormatChecker 以「返回真值」判定通过，返回 None 会被当作失败。
+    """
+    if not isinstance(value, str):
+        raise ValueError("date-time 必须是字符串")
+    dt = _dt.datetime.fromisoformat(value.replace("Z", "+00:00"))  # 非法值抛 ValueError
+    if dt.tzinfo is None:
+        raise ValueError("date-time 必须带时区")
+    return True
+
+
+# --------------------------------------------------------------------------- #
+# schema 校验器（进程内单例，只读 schemas/）
+# --------------------------------------------------------------------------- #
+_FMT = FormatChecker()
+_FMT.checkers["date-time"] = (_self_check_datetime, (ValueError,))
+
+
+def _load_validator(filename: str):
+    path = SCHEMAS_DIR / filename
+    schema = json.loads(path.read_text(encoding="utf-8"))
+    Draft7Validator.check_schema(schema)
+    return Draft7Validator(schema, format_checker=_FMT)
+
+
+_VALIDATORS = {
+    "claimcard": _load_validator(f"claimcard-{CLAIMCARD_VERSION}.json"),
+    "claimrow": _load_validator(f"claimrow-{CLAIMROW_VERSION}.json"),
+}
+
+#: ClaimRow 1.2.0 的冻结字段集（用于把 M1 扩展字段隔离在 schema 校验之外）
+_CLAIMROW_PROPS = set(
+    json.loads((SCHEMAS_DIR / f"claimrow-{CLAIMROW_VERSION}.json").read_text(encoding="utf-8"))["properties"]
+)
+
+
+def validate_card(card: dict[str, Any]) -> None:
+    """步 1（ClaimCard）：全量 schema + 三条 1.4.0 规则。"""
+    errors = sorted(_VALIDATORS["claimcard"].iter_errors(card), key=lambda e: e.path)
+    if errors:
+        first = errors[0]
+        raise SchemaFail(f"ClaimCard 校验失败：{first.message}（{list(first.path)}）")
+
+
+def validate_row(row: dict[str, Any]) -> None:
+    """步 1（ClaimRow）：复合 schema（内嵌 ClaimCard 全文）+ 版本绑定。
+
+    冻结的 ClaimRow 1.2.0 没有链式完整性字段，M1 只把它当作**扩展**（`prev_row_hash` /
+    `row_hash`）而不是改冻结版本，因此校验时按冻结字段视图校验，扩展字段由 `audit()` 复算。
+    """
+    view = {k: v for k, v in row.items() if k in _CLAIMROW_PROPS}
+    errors = sorted(_VALIDATORS["claimrow"].iter_errors(view), key=lambda e: e.path)
+    if errors:
+        first = errors[0]
+        raise SchemaFail(f"ClaimRow 校验失败：{first.message}（{list(first.path)}）")
 
 
 # --------------------------------------------------------------------------- #
@@ -150,12 +240,7 @@ def _append_line(path: Path, payload: dict[str, Any]) -> None:
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
-    out: list[dict[str, Any]] = []
-    for raw in path.read_text(encoding="utf-8").splitlines():
-        raw = raw.strip()
-        if raw:
-            out.append(json.loads(raw))
-    return out
+    return [json.loads(raw) for raw in path.read_text(encoding="utf-8").splitlines() if raw.strip()]
 
 
 def _rewrite_jsonl(path: Path, rows: Iterable[dict[str, Any]]) -> None:
@@ -190,15 +275,17 @@ class AuditReport:
 # 账本
 # --------------------------------------------------------------------------- #
 class Ledger:
-    """append-only 账本 + rawlog + 产物库 + WAL 的最小实现（单进程）。"""
+    """append-only 账本 + rawlog + 产物/脚本库 + WAL 的最小实现（单进程）。"""
 
     def __init__(self, root: str | os.PathLike[str], *, fsync: bool = True) -> None:
         self.root = Path(root)
         self.claims_path = self.root / "claims" / "CLAIMS.jsonl"
         self.rawlog_path = self.root / "rawlog" / "rawlog-0000.jsonl"
         self.artifacts_dir = self.root / "artifacts"
+        self.scripts_dir = self.root / "scripts"
         self.wal_dir = self.root / "wal"
-        for d in (self.claims_path.parent, self.rawlog_path.parent, self.artifacts_dir, self.wal_dir):
+        for d in (self.claims_path.parent, self.rawlog_path.parent,
+                  self.artifacts_dir, self.scripts_dir, self.wal_dir):
             d.mkdir(parents=True, exist_ok=True)
         self._fsync = fsync
 
@@ -209,85 +296,111 @@ class Ledger:
     def raw_events(self) -> list[dict[str, Any]]:
         return _read_jsonl(self.rawlog_path)
 
-    def row_ids(self) -> set[str]:
-        return {r["row_id"] for r in self.rows()}
-
-    # ---------------- 产物 ----------------
-    def store_artifact(self, data: bytes) -> str:
-        """内容寻址落盘，返回 `sha256:…` 哈希。"""
-        digest = sha256_bytes(data)
+    # ---------------- 内容寻址存储 ----------------
+    @staticmethod
+    def _blob_path(base: Path, digest: str) -> Path:
         hexpart = digest.split(":", 1)[1]
-        target = self.artifacts_dir / hexpart[:2] / hexpart[2:14]
-        if target.exists() and sha256_file(target) == digest:
-            return digest
-        _atomic_write(target, data)
+        return base / hexpart[:2] / hexpart[2:14]
+
+    def store_artifact(self, data: bytes) -> str:
+        """产物落盘（内容寻址），返回 `sha256:…`。"""
+        digest = sha256_bytes(data)
+        self._put_blob(self.artifacts_dir, digest, data)
         return digest
 
+    def store_script(self, data: bytes) -> str:
+        """脚本落盘（内容寻址），返回 `sha256:…`。"""
+        digest = sha256_bytes(data)
+        self._put_blob(self.scripts_dir, digest, data)
+        return digest
+
+    def _put_blob(self, base: Path, digest: str, data: bytes) -> None:
+        target = self._blob_path(base, digest)
+        if target.exists() and sha256_file(target) == digest:
+            return
+        _atomic_write(target, data)
+
     def artifact_path(self, digest: str) -> Path:
-        hexpart = digest.split(":", 1)[1]
-        return self.artifacts_dir / hexpart[:2] / hexpart[2:14]
+        return self._blob_path(self.artifacts_dir, digest)
 
-    # ---------------- 校验（第 4/5 步 hash 子集）----------------
-    def verify(self, record: dict[str, Any]) -> None:
+    def script_path(self, digest: str) -> Path:
+        return self._blob_path(self.scripts_dir, digest)
+
+    # ---------------- 步 4：hash 绑定（子集）----------------
+    def verify_binding(self, card: dict[str, Any]) -> None:
         """重算脚本哈希与产物哈希；不一致即拒绝（不改动任何状态）。"""
-        script = record.get("script") or {}
-        spath, sdigest = script.get("path"), script.get("sha256")
-        if not spath or not sdigest:
-            raise HashMismatch("声明卡缺少 script.path / script.sha256")
-        p = Path(spath)
-        if not p.is_absolute():
-            p = (self.root / p).resolve()
-        if not p.exists():
-            raise ArtifactUnreachable(f"脚本不可达：{p}", code="ARTIFACT_UNREACHABLE")
-        if sha256_file(p) != sdigest:
-            raise HashMismatch(f"脚本哈希不匹配：{p}")
-
-        evidence = record.get("evidence") or {}
-        adigest = evidence.get("artifact_sha256")
-        if not adigest:
-            raise HashMismatch("evidence.artifact_sha256 必填")
-        apath = self.artifact_path(adigest)
-        if not apath.exists():
-            raise ArtifactUnreachable(f"产物不可达：{adigest}", code="ARTIFACT_UNREACHABLE")
-        if sha256_file(apath) != adigest:
-            raise HashMismatch(f"产物哈希不匹配：{adigest}")
+        evidence = card.get("evidence")
+        if not evidence:  # context / framing 卡按 schema 不允许 evidence
+            return
+        script_hash = evidence.get("script_hash")
+        if script_hash:
+            path = self.script_path(script_hash)
+            if not path.exists():
+                raise ArtifactUnreachable(f"脚本不可达：{script_hash}")
+            if sha256_file(path) != script_hash:
+                raise HashMismatch(f"脚本哈希不匹配：{script_hash}")
+        for digest in evidence.get("output_hashes") or []:
+            path = self.artifact_path(digest)
+            if not path.exists():
+                raise ArtifactUnreachable(f"产物不可达：{digest}")
+            if sha256_file(path) != digest:
+                raise HashMismatch(f"产物哈希不匹配：{digest}")
 
     # ---------------- 落账 ----------------
     def append(
         self,
-        record: dict[str, Any],
+        card: dict[str, Any],
         *,
+        manifest_version: str = "MANIFEST#0",
+        venue_profile_version: str = "vp-2026.10",
         now: float | None = None,
         crash_after: str | None = None,
     ) -> AppendResult:
         """幂等落账。`crash_after` ∈ {None, "rawlog", "ledger"} 供故障注入测试使用。"""
-        row_id = derive_row_id(record)
+        stub = {
+            "claimcard_schema_version": CLAIMCARD_VERSION,
+            "card": card,
+            "manifest_version": manifest_version,
+            "venue_profile_version": venue_profile_version,
+        }
+        row_id = derive_row_id(stub)
         existing = {r["row_id"]: r for r in self.rows()}
         if row_id in existing:
             return AppendResult(row_id=row_id, appended=False,
                                 row_seq=int(existing[row_id].get("row_seq", 0)), duplicate=True)
 
-        self.verify(record)  # 先校验后落盘：失败不留任何痕迹
+        # 步 1 schema → 步 4 hash：先校验后落盘，失败不留痕迹
+        validate_card(card)
+        self.verify_binding(card)
 
-        txn = {
+        ts = now if now is not None else time.time()
+        rows = self.rows()
+        row: dict[str, Any] = dict(stub)
+        row.update({
             "row_id": row_id,
-            "stage": "pending",
-            "record": record,
-            "created_at": now if now is not None else time.time(),
-        }
+            "row_seq": len(rows) + 1,
+            "appended_at": _iso(ts),
+            "audit_event_id": _audit_event_id(row_id),
+            "prev_row_hash": rows[-1]["row_hash"] if rows else "",
+        })
+        row["row_hash"] = chain_digest(row)
+        validate_row(row)  # 落账前再按 ClaimRow 复合 schema 复核一次
+
+        txn = {"row_id": row_id, "stage": "pending", "row": row, "created_at": ts}
         wal_path = self.wal_dir / f"{row_id}.json"
         _atomic_write(wal_path, json.dumps(txn, ensure_ascii=False, sort_keys=True).encode("utf-8"))
 
         # ① rawlog（第二证据源）：同一 row_id 只记一条
-        events = self.raw_events()
-        if not any(e.get("row_id") == row_id for e in events):
+        if not any(e.get("row_id") == row_id for e in self.raw_events()):
+            evidence = card.get("evidence") or {}
             _append_line(self.rawlog_path, {
                 "event_type": "claim.append",
                 "row_id": row_id,
-                "claim_id": record.get("claim_id"),
-                "script_sha256": (record.get("script") or {}).get("sha256"),
-                "artifact_sha256": (record.get("evidence") or {}).get("artifact_sha256"),
-                "recorded_at": txn["created_at"],
+                "claim_id": card.get("claim_id"),
+                "claim_type": card.get("claim_type"),
+                "script_hash": evidence.get("script_hash"),
+                "output_hashes": evidence.get("output_hashes") or [],
+                "recorded_at": ts,
             })
         if crash_after == "rawlog":
             raise SimulatedCrash("rawlog 已写、账本未写（模拟崩溃）")
@@ -303,20 +416,10 @@ class Ledger:
 
     def _commit(self, txn: dict[str, Any]) -> AppendResult:
         """把事务落到账本（幂等：已存在同 row_id 直接返回）。"""
-        rows = self.rows()
-        if any(r["row_id"] == txn["row_id"] for r in rows):
+        if any(r["row_id"] == txn["row_id"] for r in self.rows()):
             return AppendResult(row_id=txn["row_id"], appended=False, duplicate=True)
-        seq = len(rows) + 1
-        row = dict(txn["record"])
-        row.update({
-            "row_id": txn["row_id"],
-            "row_seq": seq,
-            "prev_row_hash": rows[-1]["row_hash"] if rows else "",
-            "appended_at": txn["created_at"],
-        })
-        row["row_hash"] = chain_digest(row)
-        _append_line(self.claims_path, row)
-        return AppendResult(row_id=txn["row_id"], appended=True, row_seq=seq)
+        _append_line(self.claims_path, txn["row"])
+        return AppendResult(row_id=txn["row_id"], appended=True, row_seq=txn["row"]["row_seq"])
 
     # ---------------- 崩溃恢复 ----------------
     def recover(self) -> dict[str, int]:
@@ -330,14 +433,13 @@ class Ledger:
                 stats["cleaned"] += 1
             elif stage == "rawlog_done":
                 self._commit(txn)
-                txn["stage"] = "committed"
-                _atomic_write(wal_path, json.dumps(txn, ensure_ascii=False, sort_keys=True).encode("utf-8"))
                 wal_path.unlink(missing_ok=True)
                 stats["finished"] += 1
             else:  # pending：账本没有该行，rawlog 若有残留需回滚
-                events = [e for e in self.raw_events() if e.get("row_id") != txn["row_id"]]
-                if len(events) != len(self.raw_events()):
-                    _rewrite_jsonl(self.rawlog_path, events)
+                events = self.raw_events()
+                kept = [e for e in events if e.get("row_id") != txn["row_id"]]
+                if len(kept) != len(events):
+                    _rewrite_jsonl(self.rawlog_path, kept)
                 wal_path.unlink(missing_ok=True)
                 stats["rolled_back"] += 1
         return stats
@@ -374,16 +476,21 @@ class Ledger:
                              "detail": f"rawlog 事件 {rid} 未落账（疑似中断未恢复）"})
 
         for row in rows:
-            adigest = (row.get("evidence") or {}).get("artifact_sha256")
-            apath = self.artifact_path(adigest) if adigest else None
-            if apath is None or not apath.exists() or sha256_file(apath) != adigest:
-                findings.append({"code": "ARTIFACT_MISSING",
-                                 "detail": f"行 {row['row_id']} 的产物缺失或已变"})
+            evidence = (row.get("card") or {}).get("evidence") or {}
+            digests = list(evidence.get("output_hashes") or [])
+            if evidence.get("script_hash"):
+                digests.append(evidence["script_hash"])
+            for digest in digests:
+                base = self.scripts_dir if digest == evidence.get("script_hash") else self.artifacts_dir
+                path = self._blob_path(base, digest)
+                if not path.exists() or sha256_file(path) != digest:
+                    findings.append({"code": "ARTIFACT_MISSING",
+                                     "detail": f"行 {row['row_id']} 的产物/脚本缺失或已变：{digest}"})
 
         return AuditReport(ok=not findings, rows=len(rows), findings=findings, checked_at=time.time())
 
     # ---------------- 只读重放 ----------------
     def replay(self) -> list[dict[str, Any]]:
-        """按 row_seq 顺序返回稳定投影（可与非 JCS 实现对照，验证确定性）。"""
+        """按 row_seq 顺序返回稳定投影（可独立复算，验证确定性）。"""
         rows = sorted(self.rows(), key=lambda r: int(r.get("row_seq", 0)))
         return [stable_projection(r) for r in rows]

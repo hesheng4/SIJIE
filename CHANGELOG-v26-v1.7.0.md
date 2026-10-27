@@ -102,4 +102,21 @@ python tools/jcs.py --selftest           # RFC 8785 官方向量
 **故意不写进冻结文档**、不登记进 `freeze_codes.py`，以免文档与码表漂移。
 
 **当前全绿口径**：六 gate —— `jcs.py --selftest` 35/35 · `gen_composites.py --check` 2 件 · `validate_freeze.py` 82 断言
-（G1 42 / G2 23 / G3 7 / G4 10）· `check_cross_refs.py` 18 项 · `check_docs_consistency.py` 73 项 · `m1_acceptance.py` 31 项。
+（G1 42 / G2 23 / G3 7 / G4 10）· `check_cross_refs.py` 18 项 · `check_docs_consistency.py` 73 项 · `m1_acceptance.py` 40 项（v2，见 §10）。
+
+## 10. M1 行为验收 v2（对齐 ClaimRow 真实 schema + 八步链步 1）
+
+用户「继续」后按时给出的下一步建议实施：落账对象从 v1 的自造简化记录，换成**真实 `ClaimRow 1.2.0`**（内嵌 `ClaimCard 1.4.0`），并补上八步校验链的**第 1 步全量 schema 校验**。冻结对象与版本口径仍不变（v26 / v1.7.0 / ClaimCard 1.4.0 / ClaimRow 1.2.0）。
+
+| 新增 / 变更 | 内容 | 验收 |
+|---|---|---|
+| `m1/ledger.py` | 行对象 = ClaimRow 1.2.0 冻结字段 + `prev_row_hash` / `row_hash` 两个**链式扩展字段**（schema 校验按冻结字段视图进行，不改冻结 schema）；`validate_card()` / `validate_row()` 抛 `SCHEMA_FAIL`；`date-time` 因本机缺 `rfc3339-validator` 改为自实现并强制注入；`audit_event_id` 改为确定性派生（幂等重放同值）；append 顺序 = stub → row_id → 幂等短路 → 步1 schema → 步4 hash → WAL → rawlog → 提交 | — |
+| `tools/m1_acceptance.py` | 重写为 **40 项断言**：A 幂等（8）· B hash 与失败原子性（5）· C WAL（9）· D 双源对账（6）· E 重放（4）· **F 步 1 schema（8）** | `M1 行为验收：全绿（40 项断言；… / F 步1 schema）` |
+| `README.md` | M1 章节改五条承诺（步1 schema / hash / 幂等 / WAL / 双源对账）、用法示例改真实 ClaimCard、边界重写（已实现步 1 + 步 4 子集） | — |
+
+实现过程中被断言抓出的两个真 bug：
+
+1. `VOLATILE` 漏了 `prev_row_hash` —— 该字段由前序行决定、却在稳定投影里，重派生 `row_id` 与落账时不一致，审计会对正常账本误报 `TAMPER_DETECTED`。
+2. 自实现 `date-time` checker 返回 `None` —— `jsonschema.FormatChecker` 以**返回真值**判定通过，返回 `None` 会被当成失败，导致合法卡全部 `SCHEMA_FAIL`；修法：合法时返回 `True`。
+
+**仍未实现（M3，明确不冒充）**：步 2/3/5/6/7/8、六道 rail、快照/DOI 校验、`audit_event_id` 签发。
