@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="1280" height="720" viewBox="0 0 1280 720" font-family="Arial, sans-serif"><rect x="0" y="0" width="1280" height="720" fill="#FFFFFF" />
+<g id="master-shape-8" data-pptx-object="picture" data-pptx-frame="0 250.57 1280 218.86" data-pptx-source-ref="master:8">
+<image data-pptx-object="picture" data-pptx-frame="0 250.57 1280 218.86" href="../images/image4.jpeg" x="0" y="250.57" width="1280" height="218.86" preserveAspectRatio="none" />
+</g>
+<g id="layout-shape-4" data-pptx-object="shape" data-pptx-frame="58.47 299.89 411.5 87.23" data-pptx-prst="rect" data-pptx-source-ref="layout:4" data-pptx-semantic-object="shape">
+<path d="M 58.47 299.89 L 469.96 299.89 L 469.96 387.12 L 58.47 387.12 Z" fill="none" data-pptx-part="geometry" />
+
+
+<text x="68.07" y="367.3591601" text-anchor="start" xml:space="preserve" font-size="64" fill="#175CFE" font-weight="bold" data-pptx-text-baseline="metrics-v1">Thank you.</text>
+</g></svg>

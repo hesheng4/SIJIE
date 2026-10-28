@@ -157,6 +157,21 @@ python demo/run_e2e.py        # 从零重建账本并跑完整链路（数据与
 
 细节见 [`demo/README.md`](demo/README.md)。
 
+## 初赛提交稿（`projects/`）
+
+openJiuwen 智能体创意大赛的初赛稿不是手工拼的，是这条流水线生成的：
+
+- 成品：[projects/sijie_20261028/思解-openJiuwen创意大赛.pptx](projects/sijie_20261028/思解-openJiuwen创意大赛.pptx) —— 11 页，基于官方模板逐页**原生编辑**（DrawingML 可编辑，非图片拼贴）；
+- 源：`sources/source.pptx`（模板原件）+ `authoring-svg-flat/*.svg`（每页一层 SVG）+ `author_pages.py`（内容写入脚本，从 `_pristine/` 复原后幂等重跑）；
+- 校验链：`svg_quality_checker.py --roundtrip`（11/11）→ `svg_to_pptx.py --roundtrip`（postflight passed）→ `pptx_delivery_check.py`（0 error）。
+
+```bash
+cd projects/sijie_20261028
+python author_pages.py        # 改文案/版式后重跑（幂等）
+```
+
+`exports/`、`analysis/`、`validation/`、`.ppt-inspect/` 与 `*.备份.pptx` 都是一次性或可重建产物，已在 `.gitignore` 中排除。
+
 ## 本地运行
 
 前置条件：

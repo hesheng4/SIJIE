@@ -32,3 +32,10 @@ jiuwenswarm-develop/
 # 端到端演示的本地账本与派生产物（数据与脚本入库，账本与产物可重建）
 demo/.store/
 demo/out/
+
+# 演示文稿（PPT）工作区：导出物/分析/校验回执与备份可由 author_pages.py 重建，不入库
+.ppt-inspect/
+projects/sijie_20261028/exports/
+projects/sijie_20261028/analysis/
+projects/sijie_20261028/validation/
+projects/sijie_20261028/*.备份.pptx

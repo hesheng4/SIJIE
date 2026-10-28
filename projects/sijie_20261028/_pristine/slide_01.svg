@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="1280" height="720" viewBox="0 0 1280 720" font-family="&quot;微软雅黑&quot;, sans-serif"><rect x="0" y="0" width="1280" height="720" fill="#FFFFFF" />
+<g id="layout-shape-7" data-pptx-object="picture" data-pptx-frame="0 76.8 1280 563.42" data-pptx-source-ref="layout:7">
+<svg data-pptx-object="picture" data-pptx-frame="0 76.8 1280 563.42" x="0" y="76.8" width="1280" height="563.42" viewBox="0 0.10667 1 0.78252" preserveAspectRatio="none" overflow="hidden"><image href="../images/image1.jpeg" x="0" y="0" width="1" height="1" preserveAspectRatio="none" /></svg>
+</g>
+<g id="shape-2" data-pptx-object="shape" data-pptx-frame="28 251.59 696 175.84" data-ph-type="ctrTitle" data-pptx-prst="rect" data-pptx-source-ref="slide:2" data-pptx-semantic-object="shape">
+<path d="M 28 251.59 L 724 251.59 L 724 427.42 L 28 427.42 Z" fill="none" data-ph-type="ctrTitle" data-pptx-part="geometry" />
+
+
+<text x="37.6" y="352.46503937" text-anchor="start" xml:space="preserve" font-size="42.67" fill="#000000" font-weight="bold" data-pptx-text-baseline="metrics-v1"><tspan>openJiuwen</tspan><tspan> </tspan><tspan>创意大赛提交模板</tspan></text>
+</g>
+<g id="shape-3" data-pptx-object="shape" data-pptx-frame="28 499.86 471.2 83.92" data-ph-type="subTitle" data-pptx-placeholder-index="1" data-pptx-prst="rect" data-pptx-source-ref="slide:3" data-pptx-semantic-object="shape">
+<path d="M 28 499.86 L 499.2 499.86 L 499.2 583.78 L 28 583.78 Z" fill="none" data-ph-type="subTitle" data-pptx-placeholder-index="1" data-pptx-part="geometry" />
+
+
+</g></svg>
