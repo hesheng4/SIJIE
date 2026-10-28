@@ -518,7 +518,7 @@ def page10() -> None:
         ("规格", ["阶段 1 交付物 v1.7.0", "六件 schema 与反例测试规格"]),
         ("实现", ["m1/ 八步链 · m1/rails.py 六道门", "demo/run_e2e.py 端到端"]),
         ("验收", ["七道门禁全绿的 CI 记录", ".github/workflows/gates.yml"]),
-        ("仓库", ["github.com/hesheng4/HuaWei", "提交与变更见 CHANGELOG"]),
+        ("仓库", ["github.com/hesheng4/SIJIE", "提交与变更见 CHANGELOG"]),
     ]
     rp = [text_el(700, 112, ["参考文档与可核查入口"], fs=16, fill=RED, leading=22, bold=True)]
     ry = 160
@@ -540,7 +540,7 @@ def page11() -> None:
         "p11-tail", [40, 620, 1000, 60],
         text_el(70, 646, ["思解 SIJIE ｜ 让每一句结论都能被验证 ｜ openJiuwen 智能体创意大赛 · 初赛 · 科研赛道"],
                 fs=13, fill=SUB, leading=18),
-        text_el(70, 670, ["github.com/hesheng4/HuaWei"], fs=12, fill=SUB, leading=16),
+        text_el(70, 670, ["github.com/hesheng4/SIJIE"], fs=12, fill=SUB, leading=16),
     )
     save("slide_07.svg", append_groups(s, groups))
 

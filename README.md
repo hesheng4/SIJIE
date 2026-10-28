@@ -172,6 +172,8 @@ python author_pages.py        # 改文案/版式后重跑（幂等）
 
 `exports/`、`analysis/`、`validation/`、`.ppt-inspect/` 与 `*.备份.pptx` 都是一次性或可重建产物，已在 `.gitignore` 中排除。
 
+> **注意**：提交稿已在 PowerPoint 中人工改动过（部分页面被精简、封面与页脚有调整）。**以 `projects/sijie_20261028/思解-openJiuwen创意大赛.pptx` 为准**；`author_pages.py` 是初版生成脚本，重跑会用脚本内容覆盖这些人工修改。
+
 ## 本地运行
 
 前置条件：
