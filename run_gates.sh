@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# run_gates.sh — D:\HuaWei 阶段 1 冻结候选包的统一门禁入口
+# run_gates.sh — 阶段 1 冻结候选包（思解 / SIJIE）的统一门禁入口
 #
 # 平台：Windows git-bash / WSL / Ubuntu 均可运行（只依赖 bash + python）。
 # 用法：bash run_gates.sh
