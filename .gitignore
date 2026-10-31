@@ -39,3 +39,6 @@ projects/sijie_20261028/exports/
 projects/sijie_20261028/analysis/
 projects/sijie_20261028/validation/
 projects/sijie_20261028/*.备份.pptx
+
+# 提交包（由 tools/build_submission_pkg.py 生成，可重建）
+dist/
